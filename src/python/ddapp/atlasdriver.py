@@ -314,6 +314,12 @@ class AtlasDriver(object):
         msg.data = False
         lcmUtils.publish('RECOVERY_ENABLE', msg)
 
+    def sendStepRecoveryTriggerOn(self):
+        msg = lcmdrc.recovery_trigger_t()
+        msg.activate = True
+        msg.override = True
+        lcmUtils.publish('STEP_RECOVERY_TRIGGER', msg)
+
     def sendRecoveryTriggerOn(self):
         msg = lcmdrc.recovery_trigger_t()
         msg.activate = True

@@ -11,7 +11,8 @@ l = QtGui.QVBoxLayout(w)
 
 Button = namedtuple('Button', ['name', 'callback', 'color']);
 buttons = [
-           Button('Reactive Recovery', atlasDriver.sendRecoveryTriggerOn, None)
+           Button('Reactive Recovery', atlasDriver.sendRecoveryTriggerOn, None),
+           Button('Step Recovery', atlasDriver.sendStepRecoveryTriggerOn, None)
            ]
 
 for button in buttons:
