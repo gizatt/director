@@ -34,6 +34,62 @@ class WidgetDict(object):
     def __init__(self, widgets):
         addWidgetsToDict(widgets, self.__dict__)
 
+val_gains = {
+  'torsoYaw': (100.0, 1.0),
+  'torsoPitch': (800.0, 1.0),
+  'torsoRoll': (800.0, 1.0),
+  'lowerNeckPitch': (30.0, 1.0),
+  'neckYaw': (30.0, 1.0),
+  'upperNeckPitch': (30.0, 1.0),
+  'rightShoulderPitch': (100.0, 1.0),
+  'rightShoulderRoll': (100.0, 1.0),
+  'rightShoulderYaw': (50.0, 1.0),
+  'rightElbowPitch': (50.0, 1.0),
+  'rightForearmYaw': (30.0, 1.0),
+  'rightWristRoll': (30.0, 1.0),
+  'rightWristPitch': (30.0, 1.0),
+  'leftShoulderPitch': (100.0, 1.0),
+  'leftShoulderRoll': ( 100.0, 1.0),
+  'leftShoulderYaw': (50.0, 1.0),
+  'leftElbowPitch': (30.0, 1.0),
+  'leftForearmYaw': (30.0, 1.0),
+  'leftWristRoll': (30.0, 1.0),
+  'leftWristPitch': (30.0, 1.0),
+  'rightHipYaw': (50.0, 1.0),
+  'rightHipRoll': (100.0, 1.0),
+  'rightHipPitch': ( 200.0, 1.0),
+  'rightKneePitch': (50.0, 1.0),
+  'rightAnklePitch': ( 30.0, 1.0),
+  'rightAnkleRoll': ( 30.0, 1.0),
+  'leftHipYaw': (50.0, 1.0),
+  'leftHipRoll': (100.0, 1.0),
+  'leftHipPitch': ( 200.0, 1.0),
+  'leftKneePitch': (50.0, 1.0),
+  'leftAnklePitch': (30.0, 1.0),
+  'leftAnkleRoll': (30.0, 1.0)
+}
+
+def newRobotCommandMessageAtZero():
+
+    msg = lcmdrc.robot_command_t()
+    msg.num_joints = len(robotstate.getRobotStateJointNames())
+    for name in robotstate.getRobotStateJointNames():
+        jointcmd = lcmdrc.joint_command_t()
+        jointcmd.joint_name = name
+        jointcmd.position = 0
+        jointcmd.velocity = 0
+        jointcmd.effort = 0
+        jointcmd.k_q_p = val_gains[name][0]
+        jointcmd.k_q_i = 0
+        jointcmd.k_qd_p = val_gains[name][1]
+        jointcmd.k_f_p = 0
+        jointcmd.ff_qd = 0
+        jointcmd.ff_qd_d = 0
+        jointcmd.ff_f_d = 0
+        jointcmd.ff_const = 0
+        msg.joint_commands.append(jointcmd)
+    return msg
+
 
 def newAtlasCommandMessageAtZero():
 
@@ -59,6 +115,19 @@ def newAtlasCommandMessageAtZero():
 def getDefaultUserModePositionGains():
     return [10.0, 70.0, 70.0, 1000.0, 60.0, 78.0, 50.0, 140.0, 2000.0, 2000.0, 60.0, 78.0, 50.0, 140.0, 2000.0, 2000.0, 4.0, 4.0, 4.0, 4.0, 20.0, 20.0, 20.0, 4.0, 4.0, 4.0, 4.0, 20.0, 20.0, 20.0]
 
+def getDefaultUserModePositionGains():
+    return [10.0, 70.0, 70.0, 1000.0, 60.0, 78.0, 50.0, 140.0, 2000.0, 2000.0, 60.0, 78.0, 50.0, 140.0, 2000.0, 2000.0, 4.0, 4.0, 4.0, 4.0, 20.0, 20.0, 20.0, 4.0, 4.0, 4.0, 4.0, 20.0, 20.0, 20.0]
+
+def drakePoseToRobotCommand(drakePose):
+    jointIndexMap = robotstate.getRobotStateToDrakePoseJointMap()
+    robotState = np.zeros(len(jointIndexMap))
+    for jointIdx, drakeIdx in jointIndexMap.iteritems():
+        robotState[jointIdx] = drakePose[drakeIdx]
+    position = robotState.tolist()
+    msg = newRobotCommandMessageAtZero()
+    for i, jointcmd in enumerate(msg.joint_commands):
+        jointcmd.position = robotState[i]
+    return msg
 
 def drakePoseToAtlasCommand(drakePose):
     jointIndexMap = robotstate.getRobotStateToDrakePoseJointMap()
@@ -205,7 +274,7 @@ class AtlasCommandStream(object):
         if self._baseFlag:
             msg = robotstate.drakePoseToRobotState(self._currentCommandedPose)
         else:
-            msg = drakePoseToAtlasCommand(self._currentCommandedPose)
+            msg = drakePoseToRobotCommand(self._currentCommandedPose)
 
         if self.useControllerFlag:
             msg = drakePoseToQPInput(self._currentCommandedPose)
@@ -550,7 +619,7 @@ class JointTeleopPanel(object):
         self.teleopJointController.setPose('teleop_pose', pose)
         self.teleopRobotModel.setProperty('Visible', True)
         self.robotStateModel.setProperty('Visible', True)
-        self.robotStateModel.setProperty('Alpha', 0.1)
+        self.robotStateModel.setProperty('Alpha', 1.0)
         commandStream.setGoalPose(self.teleopJointController.q)
 
 
@@ -791,7 +860,7 @@ def robotMain(useDrivingGains=False, useController=False):
     if useController==True:
         commandStream.useController()
     else:
-        commandStream.publishChannel = 'ATLAS_COMMAND'
+        commandStream.publishChannel = 'NASA_COMMAND'
 
     if useDrivingGains:
         commandStream.applyDrivingDefaults()

@@ -57,7 +57,7 @@ def convertStateMessageToDrakePose(msg):
 
     jointPositions = []
     for name in getDrakePoseJointNames()[6:]:
-        jointPositions.append(jointMap[name])
+        jointPositions.append(jointMap.get(name, 0.0))
 
     trans = msg.pose.translation
     quat = msg.pose.rotation
