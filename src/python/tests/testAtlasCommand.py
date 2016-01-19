@@ -91,6 +91,28 @@ def newRobotCommandMessageAtZero():
     return msg
 
 
+def newValCommandMessageAtZero():
+
+    msg = lcmdrc.atlas_command_t()
+    msg.joint_names = [name for name in robotstate.getRobotStateJointNames()]
+    msg.num_joints = len(msg.joint_names)
+    zeros = np.zeros(msg.num_joints)
+    msg.k_q_p = [val_gains[key][0] for key in msg.joint_names]
+    msg.k_q_i = zeros.tolist()
+    msg.k_qd_p = [val_gains[key][1] for key in msg.joint_names]
+    msg.k_f_p = zeros.tolist()
+    msg.ff_qd = zeros.tolist()
+    msg.ff_qd_d = zeros.tolist()
+    msg.ff_f_d = zeros.tolist()
+    msg.ff_const = zeros.tolist()
+    msg.effort = zeros.tolist()
+    msg.velocity = zeros.tolist()
+    msg.position = zeros.tolist()
+    msg.desired_controller_period_ms = 3
+    msg.k_effort = '0'*msg.num_joints
+    return msg
+
+
 def newAtlasCommandMessageAtZero():
 
     msg = lcmdrc.atlas_command_t()
@@ -124,9 +146,9 @@ def drakePoseToRobotCommand(drakePose):
     for jointIdx, drakeIdx in jointIndexMap.iteritems():
         robotState[jointIdx] = drakePose[drakeIdx]
     position = robotState.tolist()
-    msg = newRobotCommandMessageAtZero()
-    for i, jointcmd in enumerate(msg.joint_commands):
-        jointcmd.position = robotState[i]
+    #msg = newRobotCommandMessageAtZero()
+    msg = newValCommandMessageAtZero()
+    msg.position = position
     return msg
 
 def drakePoseToAtlasCommand(drakePose):
@@ -860,7 +882,7 @@ def robotMain(useDrivingGains=False, useController=False):
     if useController==True:
         commandStream.useController()
     else:
-        commandStream.publishChannel = 'NASA_COMMAND'
+        commandStream.publishChannel = 'ROBOT_COMMAND'
 
     if useDrivingGains:
         commandStream.applyDrivingDefaults()
