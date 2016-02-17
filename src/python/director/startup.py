@@ -1123,3 +1123,73 @@ def mappingSweepEnded(taskQ, task):
 if 'startup' in drcargs.args():
     for filename in drcargs.args().startup:
         execfile(filename)
+
+
+
+
+
+#New stuff
+import kinectlcm
+kinectlcm.init(view)
+
+import bot_core
+# robotStateModel.setProperty('Visible', False)
+
+
+tr = getBotFrame('robot_yplus_tag')
+tagTranslation = list(transformUtils.poseFromTransform(tr)[0])
+tagRpy = [k*(180/math.pi) for k in list(transformUtils.rollPitchYawFromTransform(tr))] #[-90,0,90]
+
+
+#to_be_framed = ['table points', 'table plane points']
+#kinect_frames_to_handle = ['kinect source frame', 'table points frame', 'table plane points frame']
+def frameHandler(msg):
+
+    tagToCamera = transformUtils.transformFromPose(msg.trans, msg.quat)
+    cameraToTag = tagToCamera.GetLinearInverse()
+    tagToWorld = transformUtils.frameFromPositionAndRPY(tagTranslation, tagRpy)
+
+    cameraToWorld = transformUtils.concatenateTransforms([cameraToTag, tagToWorld])
+
+#    for objname in to_be_framed:
+#        obj = om.findObjectByName(objname)
+#        if obj:
+#            framename = objname + ' frame'
+#            fr = om.findObjectByName(framename)
+#            if fr is None:
+#                vis.addChildFrame(obj)
+
+ #   for objname in kinect_frames_to_handle:
+    obj = om.findObjectByName('kinect source frame')
+    if obj:
+        #filterUtils.transformPolyData(obj, cameraToWorld)
+        obj.copyFrame(cameraToWorld)
+
+
+tr = getBotFrame('robot_base')
+base_pos = transformUtils.poseFromTransform(tr)[0]
+base_rpy = transformUtils.rollPitchYawFromTransform(tr)
+
+robotStateJointController.q[0] = base_pos[0]
+robotStateJointController.q[1] = base_pos[1]
+robotStateJointController.q[2] = base_pos[2]
+robotStateJointController.q[3] = base_rpy[0]
+robotStateJointController.q[4] = base_rpy[1]
+robotStateJointController.q[5] = base_rpy[2]
+robotStateJointController.push()
+
+lcmUtils.addSubscriber('APRIL_TAG_TO_CAMERA_LEFT', bot_core.rigid_transform_t, frameHandler)
+
+
+
+# Need to invoke table segmentation
+# Then, local plane fit
+# Then, orient to plane. Fit cylinder.
+
+'''
+affObj = affordanceitems.MeshAffordanceItem.promotePolyDataItem(pickedObj)
+robotSystem.affordanceManager.registerAffordance(affObj)
+
+def specialMenuItemHandler(seed_point)
+    segmentation.segmentTable(kinect_source, seed_point)
+'''

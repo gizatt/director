@@ -91,6 +91,7 @@ class KinectSource(TimerCallback):
         self.view = view
         self.KinectQueue = _KinectQueue
 
+
         self.visible = True
         
         self.p = vtk.vtkPolyData()
@@ -101,6 +102,8 @@ class KinectSource(TimerCallback):
 
         om.addToObjectModel(self.polyDataObj)
 
+        vis.addChildFrame(self.polyDataObj)
+        
         self.queue = PythonQt.dd.ddBotImageQueue(lcmUtils.getGlobalLCMThread())
         self.queue.init(lcmUtils.getGlobalLCMThread(), drcargs.args().config_file)
 
