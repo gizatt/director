@@ -90,8 +90,265 @@ def showRightClickMenu(displayPoint, view):
     propertiesWidgetAction.setDefaultWidget(propertiesPanel)
     propertiesMenu.addAction(propertiesWidgetAction)
 
+    def onDelete():
+        om.removeFromObjectModel(pickedObj)
 
-    actions = getContextMenuActions(view, pickedObj, pickedPoint)
+    def onHide():
+        pickedObj.setProperty('Visible', False)
+
+    def onSelect():
+        om.setActiveObject(pickedObj)
+
+    reachFrame = getAsFrame(pickedObj)
+    collisionParent = getCollisionParent(pickedObj)
+    def onReachLeft():
+        reachToFrame(reachFrame, 'left', collisionParent)
+    def onReachRight():
+        reachToFrame(reachFrame, 'right', collisionParent)
+
+    def flipHandSide():
+        for obj in [pickedObj] + pickedObj.children():
+            if not isGraspSeed(obj):
+                continue
+            side = 'right' if obj.side == 'left' else 'left'
+            obj.side = side
+            color = [1.0, 1.0, 0.0]
+            if side == 'right':
+                color = [0.33, 1.0, 0.0]
+            obj.setProperty('Color', color)
+
+            polyData = handFactory.getNewHandPolyData(side)
+            obj.setPolyData(polyData)
+
+            handFrame = obj.children()[0]
+            t = transformUtils.copyFrame(handFrame.transform)
+            t.PreMultiply()
+            t.RotateY(180)
+            handFrame.copyFrame(t)
+
+            objName = obj.getProperty('Name')
+            frameName = handFrame.getProperty('Name')
+            if side == 'left':
+                obj.setProperty('Name', objName.replace("right", "left"))
+                handFrame.setProperty('Name', frameName.replace("right", "left"))
+            else:
+                obj.setProperty('Name', objName.replace("left", "right"))
+                handFrame.setProperty('Name', frameName.replace("left", "right"))
+            obj._renderAllViews()
+
+    def flipHandThumb():
+        handFrame = pickedObj.children()[0]
+        t = transformUtils.copyFrame(handFrame.transform)
+        t.PreMultiply()
+        t.RotateY(180)
+        handFrame.copyFrame(t)
+        pickedObj._renderAllViews()
+
+    def onSplineLeft():
+        splinewidget.planner.newSpline(pickedObj, 'left')
+    def onSplineRight():
+        splinewidget.planner.newSpline(pickedObj, 'right')
+
+
+    def getPointCloud(obj):
+        try:
+            obj = obj.model.polyDataObj
+        except AttributeError:
+            pass
+        try:
+            obj.polyData
+        except AttributeError:
+            return None
+        if obj and obj.polyData.GetNumberOfPoints():# and (obj.polyData.GetNumberOfCells() == obj.polyData.GetNumberOfVerts()):
+            return obj
+
+
+    pointCloudObj = getPointCloud(pickedObj)
+    affordanceObj = pickedObj if isinstance(pickedObj, affordanceitems.AffordanceItem) else None
+
+    def onSegmentGround():
+        groundPoints, scenePoints =  segmentation.removeGround(pointCloudObj.polyData)
+        vis.showPolyData(groundPoints, 'ground points', color=[0,1,0], parent='segmentation')
+        vis.showPolyData(scenePoints, 'scene points', color=[1,0,1], parent='segmentation')
+        pickedObj.setProperty('Visible', False)
+
+
+    def onCopyPointCloud():
+        global lastRandomColor
+        polyData = vtk.vtkPolyData()
+        polyData.DeepCopy(pointCloudObj.polyData)
+        
+        if pointCloudObj.getChildFrame():
+            polyData = segmentation.transformPolyData(polyData, pointCloudObj.getChildFrame().transform)
+        polyData = segmentation.addCoordArraysToPolyData(polyData)
+
+        # generate random color, and average with a common color to make them generally similar
+        lastRandomColor = lastRandomColor + 0.1 + 0.1*random.random()
+        rgb = colorsys.hls_to_rgb(lastRandomColor, 0.7, 1.0)
+        obj = vis.showPolyData(polyData, pointCloudObj.getProperty('Name') + ' copy', color=rgb, parent='point clouds')
+
+        #t = vtk.vtkTransform()
+        #t.PostMultiply()
+        #t.Translate(filterUtils.computeCentroid(polyData))
+        #segmentation.makeMovable(obj, t)
+        om.setActiveObject(obj)
+        pickedObj.setProperty('Visible', False)
+
+    def onMergeIntoPointCloud():
+        allPointClouds = om.findObjectByName('point clouds')
+        if allPointClouds:
+            allPointClouds = [i.getProperty('Name') for i in allPointClouds.children()]
+        sel =  QtGui.QInputDialog.getItem(None, "Point Cloud Merging", "Pick point cloud to merge into:", allPointClouds, current=0, editable=False)
+        sel = om.findObjectByName(sel)
+
+        # Make a copy of each in same frame
+        polyDataInto = vtk.vtkPolyData()
+        polyDataInto.ShallowCopy(sel.polyData)
+        if sel.getChildFrame():
+            polyDataInto = segmentation.transformPolyData(polyDataInto, sel.getChildFrame().transform)
+
+        polyDataFrom = vtk.vtkPolyData()
+        polyDataFrom.DeepCopy(pointCloudObj.polyData)
+        if pointCloudObj.getChildFrame():
+            polyDataFrom = segmentation.transformPolyData(polyDataFrom, pointCloudObj.getChildFrame().transform)
+
+        # Actual merge
+        append = filterUtils.appendPolyData([polyDataFrom, polyDataInto])
+        if sel.getChildFrame():
+            polyDataInto = segmentation.transformPolyData(polyDataInto, sel.getChildFrame().transform.GetInverse())
+
+        # resample
+        append = segmentationroutines.applyVoxelGrid(append, 0.01)
+        append = segmentation.addCoordArraysToPolyData(append)
+
+        # Recenter the frame
+        sel.setPolyData(append)
+        t = vtk.vtkTransform()
+        t.PostMultiply()
+        t.Translate(filterUtils.computeCentroid(append))
+        segmentation.makeMovable(sel, t)
+
+        # Hide the old one
+        if pointCloudObj.getProperty('Name') in allPointClouds:
+            pointCloudObj.setProperty('Visible', False)
+
+
+    def onSegmentTableScene():
+        polyData = pointCloudObj.polyData
+        if pointCloudObj.actor.GetUserTransform():
+            polyData = filterUtils.transformPolyData(polyData, pointCloudObj.actor.GetUserTransform())
+        data = segmentation.segmentTableScene(polyData, pickedPoint)
+        vis.showClusterObjects(data.clusters + [data.table], parent='segmentation')
+
+    def onSegmentDrillAlignedWithTable():
+        segmentation.segmentDrillAlignedWithTable(pickedPoint, pointCloudObj.polyData)
+
+    def onCachePickedPoint():
+        ''' Cache the Picked Point for general purpose use'''
+        global lastCachedPickedPoint
+        lastCachedPickedPoint = pickedPoint
+        #data = segmentation.segmentTableScene(pointCloudObj.polyData, pickedPoint)
+        #vis.showClusterObjects(data.clusters + [data.table], parent='segmentation')
+
+
+    def onLocalPlaneFit():
+        planePoints, normal = segmentation.applyLocalPlaneFit(pointCloudObj.polyData, pickedPoint, searchRadius=0.1, searchRadiusEnd=0.2)
+        obj = vis.showPolyData(planePoints, 'local plane fit', color=[0,1,0])
+        obj.setProperty('Point Size', 7)
+
+        fields = segmentation.makePolyDataFields(obj.polyData)
+
+        pose = transformUtils.poseFromTransform(fields.frame)
+        desc = dict(classname='BoxAffordanceItem', Name='local plane', Dimensions=list(fields.dims), pose=pose)
+        box = segmentation.affordanceManager.newAffordanceFromDescription(desc)
+
+    def onOrientToMajorPlane():
+        polyData, planeFrame = segmentation.orientToMajorPlane(pointCloudObj.polyData, pickedPoint=pickedPoint)
+        pointCloudObj.setPolyData(polyData)
+
+
+    def onDiskGlyph():
+        result = segmentation.applyDiskGlyphs(pointCloudObj.polyData)
+        obj = vis.showPolyData(result, 'disks', color=[0.8,0.8,0.8])
+        om.setActiveObject(obj)
+        pickedObj.setProperty('Visible', False)
+
+    def onArrowGlyph():
+        result = segmentation.applyArrowGlyphs(pointCloudObj.polyData)
+        obj = vis.showPolyData(result, 'disks')
+
+    def onSegmentationEditor():
+        segmentationpanel.activateSegmentationMode(pointCloudObj.polyData)
+
+    def addNewFrame():
+        t = transformUtils.copyFrame(affordanceObj.getChildFrame().transform)
+        t.PostMultiply()
+        t.Translate(np.array(pickedPoint) - np.array(t.GetPosition()))
+        newFrame = vis.showFrame(t, '%s frame %d' % (affordanceObj.getProperty('Name'), len(affordanceObj.children())), scale=0.2, parent=affordanceObj)
+        affordanceObj.getChildFrame().getFrameSync().addFrame(newFrame, ignoreIncoming=True)
+
+    def copyAffordance():
+        desc = dict(affordanceObj.getDescription())
+        del desc['uuid']
+        desc['Name'] = desc['Name'] + ' copy'
+        aff = robotSystem.affordanceManager.newAffordanceFromDescription(desc)
+        aff.getChildFrame().setProperty('Edit', True)
+
+    def onPromoteToAffordance():
+        affObj = affordanceitems.MeshAffordanceItem.promotePolyDataItem(pickedObj)
+        robotSystem.affordanceManager.registerAffordance(affObj)
+
+    actions = [
+      (None, None),
+      ('Hide', onHide),
+      ('Delete', onDelete),
+      ('Select', onSelect)
+      ]
+
+
+    if affordanceObj:
+        actions.extend([
+            ('Copy affordance', copyAffordance),
+            ('Add new frame', addNewFrame),
+        ])
+
+    elif type(pickedObj) == vis.PolyDataItem:
+        actions.extend([
+            ('Promote to Affordance', onPromoteToAffordance),
+        ])
+
+    if isGraspSeed(pickedObj):
+        actions.extend([
+            (None, None),
+            ('Flip Side', flipHandSide),
+            ('Flip Thumb', flipHandThumb),
+        ])
+
+    if reachFrame is not None:
+        actions.extend([
+            (None, None),
+            ('Reach Left', onReachLeft),
+            ('Reach Right', onReachRight),
+            #('Spline Left', onSplineLeft),
+            #('Spline Right', onSplineRight),
+            ])
+
+    if pointCloudObj:
+        actions.extend([
+            (None, None),
+            ('Copy Pointcloud', onCopyPointCloud),
+            ('Merge Pointcloud Into', onMergeIntoPointCloud),
+            ('Segment Ground', onSegmentGround),
+            ('Segment Table', onSegmentTableScene),
+            ('Segment Drill Aligned', onSegmentDrillAlignedWithTable),
+            ('Local Plane Fit', onLocalPlaneFit),
+            ('Orient with Horizontal', onOrientToMajorPlane),
+            ('Arrow Glyph', onArrowGlyph),
+            ('Disk Glyph', onDiskGlyph),
+            ('Cache Pick Point', onCachePickedPoint),
+            (None, None),
+            ('Open Segmentation Editor', onSegmentationEditor)
+            ])
 
     for actionName, func in actions:
         if not actionName:
