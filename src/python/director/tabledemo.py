@@ -22,6 +22,7 @@ from director import sceneloader
 
 from director.debugVis import DebugData
 from director import affordanceitems
+from director import filterUtils
 from director import ikplanner
 from director import vtkNumpy
 from numpy import array
@@ -92,7 +93,7 @@ class TableDemo(object):
 
         self.constraintSet = []
 
-        self.reachDist = 0.07
+        self.reachDist = 0.09
 
         # Switch indicating whether to use affordances as a collision environment
         self.useCollisionEnvironment = True
@@ -469,7 +470,7 @@ class TableDemo(object):
         startPose = self.getPlanningStartPose()
 
         if self.ikPlanner.fixedBaseArm: # includes reachDist hack instead of in ikPlanner (TODO!)
-            f = transformUtils.frameFromPositionAndRPY( np.array(frame.transform.GetPosition())-np.array([self.reachDist+.15,0,-.03]), [0,0,-90] )
+            f = transformUtils.frameFromPositionAndRPY( np.array(frame.transform.GetPosition())-np.array([self.reachDist+.15,0,-.03]), [0,90,-90] )
             f.PreMultiply()
             f.RotateY(90)
             f.Update()
@@ -675,7 +676,7 @@ class TableDemo(object):
         startPose = self.getPlanningStartPose()
 
         if self.ikPlanner.fixedBaseArm: # includes distance hack and currently uses reachDist instead of touchDist (TODO!)
-            f = transformUtils.frameFromPositionAndRPY( np.array(frame.transform.GetPosition())-np.array([self.reachDist+.05,0,-0.03]), [0,0,-90] )
+            f = transformUtils.frameFromPositionAndRPY( np.array(frame.transform.GetPosition())-np.array([self.reachDist+.05,0,-0.03]), [0,90,-90] )
             f.PreMultiply()
             f.RotateY(90)
             f.Update()
@@ -1053,6 +1054,20 @@ class TableDemo(object):
             objScene = vis.showPolyData(self.getInputPointCloud(), 'scene', colorByName='rgb_colors')
         else:
             objScene = vis.updatePolyData(self.getInputPointCloud(), 'scene', colorByName='rgb_colors')
+
+    def prepIRB140GetPointsAndSegmentTable(self):
+        ks = om.findObjectByName('kinect source')
+        polyData = ks.polyData
+        if ks.actor.GetUserTransform():
+            polyData = filterUtils.transformPolyData(polyData, ks.actor.GetUserTransform())
+        # TODO: read real-world coords of table center from irb140.cfg
+        worldCoordTableCenter = [.37, 0, .75]
+        pickedTableCenterPoint = polyData.GetPoint(polyData.FindPoint(worldCoordTableCenter))
+        data = segmentation.segmentTableScene(polyData, pickedTableCenterPoint)
+        vis.showClusterObjects(data.clusters + [data.table], parent='segmentation')
+
+        self.clusterObjects = [om.findObjectByName('object 0')]
+        print self.clusterObjects
 
 
     def prepKukaTestDemoSequence(self, inputFile=None):
@@ -1440,6 +1455,16 @@ class TableTaskPanel(TaskUserPanel):
                 addTask(rt.WaitForManipulationPlanExecution(name='wait for manip execution'), parent=group)
                 if confirm:
                    addTask(rt.UserPromptTask(name='Confirm execution has finished', message='Continue when plan finishes.'), parent=group)
+
+        def addIRBManipulation(func, name, parent=None, confirm=False):
+            group = self.taskTree.addGroup(name, parent=parent)
+            addFunc(func, name='plan motion', parent=group)
+            addTask(rt.CheckPlanInfo(name='check manip plan info'), parent=group)
+            addFunc(v.commitManipPlan, name='execute manip plan', parent=group)
+            if self.tableDemo.planner != 1:
+                addTask(rt.IRBWaitForPlanExecution(name='wait for Timeout seconds for manip execution'), parent=group)
+                if confirm:
+                   addTask(rt.UserPromptTask(name='Confirm execution has finished', message='Continue when plan finishes.'), parent=group)
                         
         def addManipulationWithFinalPose(func, name, parent=None, confirm=False):
             group = self.taskTree.addGroup(name, parent=parent)
@@ -1485,7 +1510,7 @@ class TableTaskPanel(TaskUserPanel):
         # pre-prep
         if v.ikPlanner.fixedBaseArm:
             if not v.useDevelopment:
-                addManipulation(functools.partial(v.planPostureFromDatabase, 'roomMapping', 'p3_down', side='left'), 'go to pre-mapping pose')
+                addIRBManipulation(functools.partial(v.planPostureFromDatabase, 'roomMapping', 'p3_down', side='left'), 'go to pre-mapping pose')
         # TODO(wxm): mapping
 
         # prep
@@ -1496,8 +1521,9 @@ class TableTaskPanel(TaskUserPanel):
                 addFunc(v.prepKukaTestDemoSequence, 'prep from file', parent=prep)
             else:
                 # get one frame from camera, segment on there
-                addFunc(v.prepGetSceneFrame, 'capture scene frame', parent=prep)
-                addFunc(v.prepKukaLabScene, 'prep kuka lab scene', parent=prep)
+                #addFunc(v.prepGetSceneFrame, 'capture scene frame', parent=prep)
+                #addFunc(v.prepKukaLabScene, 'prep kuka lab scene', parent=prep)
+                addFunc(v.prepIRB140GetPointsAndSegmentTable, 'capture scene and segment table', parent=prep)
         else:
             addFunc(v.autoExtendJointLimits, 'auto extend joint limits', parent=prep)
             addFunc(v.createCollisionPlanningScene, 'prep from file', parent=prep)
@@ -1516,12 +1542,17 @@ class TableTaskPanel(TaskUserPanel):
             addTask(rt.CommitFootstepPlan(name='walk to table', planName='table grasp stance footstep plan'), parent=walk)
             addTask(rt.WaitForWalkExecution(name='wait for walking'), parent=walk)
             addTask(rt.SetNeckPitch(name='set neck position', angle=35), parent=walk)
-
+        
         # lift object
+        grasp = self.taskTree.addGroup('Grasping')
         if v.ikPlanner.fixedBaseArm:
-            addManipulation(functools.partial(v.planPreGrasp, v.graspingHand ), name='raise arm')
-            addManipulation(functools.partial(v.planReachToTableObject, v.graspingHand), name='reach')
-            addManipulation(functools.partial(v.planTouchTableObject, v.graspingHand), name='touch')
+            #addManipulation(functools.partial(v.planPreGrasp, v.graspingHand ), name='raise arm')
+            addIRBManipulation(functools.partial(v.planReachToTableObject, v.graspingHand), name='reach', parent=grasp)
+            addIRBManipulation(functools.partial(v.planTouchTableObject, v.graspingHand), name='touch', parent=grasp)
+            addGrasping('close', name='close hand', parent=grasp, confirm=False)
+            addIRBManipulation(functools.partial(v.planPostureFromDatabase, 'General', 'Object Raised', side='left'), 'go to raised object pose', parent=grasp)
+            addIRBManipulation(functools.partial(v.planPostureFromDatabase, 'General', 'Object Held', side='left'), 'go to held object pose', parent=grasp)
+
         elif v.planner == 'RRT*':
             addManipulationWithFinalPose(v.getTableObjectFrame, name='reach')
             addFunc(functools.partial(v.graspTableObject, side=v.graspingHand), 'grasp', parent='reach', confirm=False)
@@ -1541,6 +1572,8 @@ class TableTaskPanel(TaskUserPanel):
             addTask(rt.CommitFootstepPlan(name='walk to start',
                                           planName='start stance footstep plan'), parent=walkToStart)
             addTask(rt.WaitForWalkExecution(name='wait for walking'), parent=walkToStart)
+        
+
 
         # walk to bin
         '''

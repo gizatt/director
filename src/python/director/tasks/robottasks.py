@@ -1203,3 +1203,45 @@ class PlanGazeTrajectory(AsyncTask):
 
         _addPlanItem(plan, '%s gaze plan' % gazeTargetFrame.getProperty('Name'), ManipulationPlanItem)
 
+
+
+class IRBWaitForPlanExecution(AsyncTask):
+
+    @staticmethod
+    def getDefaultProperties(properties):
+        properties.addProperty('Timeout', 8.0, attributes=propertyset.PropertyAttributes(minimum=0.0, maximum=1e4, singleStep=0.1, decimals=2))
+
+    def promptUserForPlanRecommit(self):
+        prompt = UserPromptTask(message='Plan appears dropped. Recommit?')
+        return prompt.run()
+
+    def run(self):
+
+        t = SimpleTimer()
+        while True:
+            if t.elapsed() > self.properties.getProperty('Timeout'):
+                break
+            else:
+                yield
+
+    '''def run(self):
+        global IRB_manip_plans_waiting_for_completion
+
+        def getMsg():
+            return IRB_manip_plans_waiting_for_completion
+
+        def ackMsg():
+            # Possible concurrency issue here
+            IRB_manip_plans_waiting_for_completion -= 1
+
+        def isExecuting():
+            return getMsg() <= 0
+
+        # wait for first status message
+        while not getMsg():
+            yield
+
+        if isExecuting():
+            raise Exception('error, invoked during plan execution and cannot guarantee safety.')
+
+        ackMsg()'''
