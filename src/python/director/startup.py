@@ -1135,9 +1135,26 @@ tagRpy = [k*(180/math.pi) for k in list(transformUtils.rollPitchYawFromTransform
 
 #to_be_framed = ['table points', 'table plane points']
 #kinect_frames_to_handle = ['kinect source frame', 'table points frame', 'table plane points frame']
-def frameHandler(msg):
 
-    tagToCamera = transformUtils.transformFromPose(msg.trans, msg.quat)
+KINECT_TRANSFORM_WINDOW_LENGTH = 15
+kinect_transform_latest = []
+
+def frameHandler(msg):
+    global kinect_transform_latest
+
+    #Take a windowed average of latest k samples, if available
+    kinect_transform_latest.append((msg.trans, msg.quat))
+    if len(kinect_transform_latest) > KINECT_TRANSFORM_WINDOW_LENGTH:
+        kinect_transform_latest = kinect_transform_latest[-KINECT_TRANSFORM_WINDOW_LENGTH:]
+
+    avg_trans = tuple([sum([kinect_transform_latest[sample][0][ind] \
+                        for sample in range(len(kinect_transform_latest))]) / len(kinect_transform_latest) \
+                        for ind in range(len(kinect_transform_latest[0][0]))])
+    avg_quat = tuple([sum([kinect_transform_latest[sample][1][ind] \
+                        for sample in range(len(kinect_transform_latest))]) / len(kinect_transform_latest) \
+                        for ind in range(len(kinect_transform_latest[0][1]))])
+
+    tagToCamera = transformUtils.transformFromPose(avg_trans, avg_quat)
     cameraToTag = tagToCamera.GetLinearInverse()
     tagToWorld = transformUtils.frameFromPositionAndRPY(tagTranslation, tagRpy)
 
