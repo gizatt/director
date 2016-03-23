@@ -185,7 +185,7 @@ class RobotModelItem(om.ObjectModelItem):
         view.render()
 
 
-def loadRobotModel(name, view=None, parent='planning', urdfFile=None, color=None, visible=True, colorMode='URDF Colors'):
+def loadRobotModel(name, view=None, parent='planning', urdfFile=None, color=None, visible=True, colorMode='URDF Colors', jointNames=None):
 
     if not urdfFile:
         urdfFile = drcargs.getDirectorConfig()['urdfConfig']['default']
@@ -213,10 +213,15 @@ def loadRobotModel(name, view=None, parent='planning', urdfFile=None, color=None
     if view is not None:
         obj.addToView(view)
 
-    jointController = jointcontrol.JointController([obj])
+    if jointNames is None:
+        jointController = jointcontrol.JointController([obj])
 
-    fixedPointFile = drcargs.getDirectorConfig()['fixedPointFile']
-    jointController.setPose('q_nom', jointController.loadPoseFromFile(fixedPointFile))
+        fixedPointFile = drcargs.getDirectorConfig()['fixedPointFile']
+        jointController.setPose('q_nom', jointController.loadPoseFromFile(fixedPointFile))
+
+    else:
+        jointController = jointcontrol.JointController([obj], jointNames=jointNames)
+        jointController.setPose('q_nom', jointController.getPose('q_zero'))
 
     return obj, jointController
 

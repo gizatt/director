@@ -69,7 +69,7 @@ class JointController(object):
         self.jointMap = dict()
         for name in msgJointNames:
             if name in self.jointNames:
-                self.jointMap[name] = self.jointNames.index(name)
+                self.jointMap[name] = self.jointNames.index(name) 
             else:
                 self.jointMap[name] = -1
 
@@ -97,7 +97,7 @@ class JointController(object):
             pose[3:6] = transformUtils.quaternionToRollPitchYaw(quat)
             for name, position in zip(msg.joint_name, msg.joint_position):
                 if self.jointMap[name] >= 0:
-                    pose[self.jointMap[name]] = position + 6
+                    pose[self.jointMap[name]] = position
 
             self.lastRobotStateMessage = msg
 

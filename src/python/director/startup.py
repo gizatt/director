@@ -1202,3 +1202,14 @@ robotSystem.affordanceManager.registerAffordance(affObj)
 def specialMenuItemHandler(seed_point)
     segmentation.segmentTable(kinect_source, seed_point)
 '''
+
+manipulandStateModels = []
+manipulandJointControllers = []
+for entry in directorConfig['fittingConfig']:
+    mstatemodel, mjointcontroller = roboturdf.loadRobotModel(entry, view, urdfFile=directorConfig['fittingConfig'][entry]['urdf'], visible=True, parent="estimation", jointNames = directorConfig['fittingConfig'][entry]['drakeJointNames'])
+    manipulandStateModels.append(mstatemodel)
+    manipulandJointControllers.append(mjointcontroller)
+    mjointcontroller.setPose(directorConfig['fittingConfig'][entry]['update_channel'], mjointcontroller.getPose('q_zero'))
+    mjointcontroller.addLCMUpdater(directorConfig['fittingConfig'][entry]['update_channel'])
+    manipulandStateModels.append(mstatemodel)
+    manipulandJointControllers.append(mjointcontroller)
