@@ -4,6 +4,7 @@ from director.timercallback import TimerCallback
 from director.simpletimer import SimpleTimer
 from director import robotstate
 from director import getDRCBaseDir
+from director import transformUtils
 from director import lcmUtils
 import drc as lcmdrc
 import bot_core
@@ -14,6 +15,7 @@ class JointController(object):
 
     def __init__(self, models, poseCollection=None, jointNames=None):
         self.jointNames = jointNames or robotstate.getDrakePoseJointNames()
+        self.jointMap = None
         self.numberOfJoints = len(self.jointNames)
         self.models = list(models)
         self.poses = {}
@@ -63,6 +65,15 @@ class JointController(object):
         matData = scipy.io.loadmat(filename)
         return np.array(matData['xstar'][:self.numberOfJoints].flatten(), dtype=float)
 
+    def regenerateJointMap(self, msgJointNames):
+        self.jointMap = dict()
+        for name in msgJointNames:
+            if name in self.jointNames:
+                self.jointMap[name] = self.jointNames.index(name)
+            else:
+                self.jointMap[name] = -1
+
+
     def addLCMUpdater(self, channelName):
         '''
         adds an lcm subscriber to update the joint positions from
@@ -73,7 +84,21 @@ class JointController(object):
             if self.ignoreOldStateMessages and self.lastRobotStateMessage is not None and msg.utime < self.lastRobotStateMessage.utime:
                 return
             poseName = channelName
-            pose = robotstate.convertStateMessageToDrakePose(msg)
+
+            # map from msg joint names to our drake joint names
+            if self.jointMap is None:
+                self.regenerateJointMap(msg.joint_name)
+
+            pose = np.zeros(self.numberOfJoints)
+            trans = msg.pose.translation
+            quat = msg.pose.rotation
+            pose[0:3] = [trans.x, trans.y, trans.z]
+            quat = [quat.w, quat.x, quat.y, quat.z]
+            pose[3:6] = transformUtils.quaternionToRollPitchYaw(quat)
+            for name, position in zip(msg.joint_name, msg.joint_position):
+                if self.jointMap[name] >= 0:
+                    pose[self.jointMap[name]] = position + 6
+
             self.lastRobotStateMessage = msg
 
             # use joint name/positions from robot_state_t and append base_{x,y,z,roll,pitch,yaw}
