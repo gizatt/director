@@ -1509,7 +1509,7 @@ class TableTaskPanel(TaskUserPanel):
         # pre-prep
         if v.ikPlanner.fixedBaseArm:
             if not v.useDevelopment:
-                addIRBManipulation(functools.partial(v.planPostureFromDatabase, 'roomMapping', 'p3_down', side='left'), 'go to pre-mapping pose')
+                addIRBManipulation(functools.partial(v.planPostureFromDatabase, 'General', 'Object Held', side='left'), 'go to pre-mapping pose')
         # TODO(wxm): mapping
 
         # prep

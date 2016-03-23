@@ -662,7 +662,7 @@ class RobotLinkHighligher(object):
 
 robotHighlighter = RobotLinkHighligher(robotStateModel)
 
-if useFootContactVis:
+if useFootContactVis and not ikPlanner.fixedBaseArm:
 
     class LCMContactDisplay(object):
         '''
