@@ -1,12 +1,12 @@
 
 
 option(USE_PCL "Build with PCL." OFF)
-option(USE_LCM "Build with lcm." OFF)
-option(USE_LCMGL "Build with lcm-gl." OFF)
+option(USE_LCM "Build with lcm." ON)
+option(USE_LCMGL "Build with lcm-gl." ON)
 option(USE_OCTOMAP "Build with octomap." OFF)
 option(USE_LIBBOT "Build with libbot." OFF)
 option(USE_DRAKE "Build with drake." OFF)
-option(USE_STANDALONE_LCMGL "Build with standalone bot-lcmgl." OFF)
+option(USE_STANDALONE_LCMGL "Build with standalone bot-lcmgl." ON)
 set(USE_EIGEN ${USE_PCL})
 
 option(USE_SYSTEM_EIGEN "Use system version of eigen.  If off, eigen will be built." OFF)
