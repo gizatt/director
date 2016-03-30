@@ -81,6 +81,7 @@ from director import playbackpanel
 from director import screengrabberpanel
 from director import splinewidget
 from director import teleoppanel
+from director import continuousmanippanel
 from director import motionplanningpanel
 from director import vtkNumpy as vnp
 from director import visualization as vis
@@ -506,6 +507,17 @@ if usePlanning:
     egressPlanner = egressPanel.egressPlanner
 
 
+
+    manipulandStateModels = []
+    manipulandJointControllers = []
+    for entry in directorConfig['fittingConfig']:
+        mstatemodel, mjointcontroller = roboturdf.loadRobotModel(entry, view, urdfFile=directorConfig['fittingConfig'][entry]['urdf'], visible=True, parent="estimation", jointNames = directorConfig['fittingConfig'][entry]['drakeJointNames'])
+        mjointcontroller.setPose(directorConfig['fittingConfig'][entry]['update_channel'], mjointcontroller.getPose('q_zero'))
+        mjointcontroller.addLCMUpdater(directorConfig['fittingConfig'][entry]['update_channel'])
+        manipulandStateModels.append(mstatemodel)
+        manipulandJointControllers.append(mjointcontroller)
+    continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
+
     taskPanels = OrderedDict()
 
     if useDrivingPlanner:
@@ -519,6 +531,7 @@ if usePlanning:
     taskPanels['Terrain'] = terrainTaskPanel.widget
     taskPanels['Table'] = tableTaskPanel.widget
     taskPanels['Continuous Walking'] = continuousWalkingTaskPanel.widget
+    taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
     if useMappingPanel:
         taskPanels['Mapping'] = mappingTaskPanel.widget
 
@@ -1202,14 +1215,3 @@ robotSystem.affordanceManager.registerAffordance(affObj)
 def specialMenuItemHandler(seed_point)
     segmentation.segmentTable(kinect_source, seed_point)
 '''
-
-manipulandStateModels = []
-manipulandJointControllers = []
-for entry in directorConfig['fittingConfig']:
-    mstatemodel, mjointcontroller = roboturdf.loadRobotModel(entry, view, urdfFile=directorConfig['fittingConfig'][entry]['urdf'], visible=True, parent="estimation", jointNames = directorConfig['fittingConfig'][entry]['drakeJointNames'])
-    manipulandStateModels.append(mstatemodel)
-    manipulandJointControllers.append(mjointcontroller)
-    mjointcontroller.setPose(directorConfig['fittingConfig'][entry]['update_channel'], mjointcontroller.getPose('q_zero'))
-    mjointcontroller.addLCMUpdater(directorConfig['fittingConfig'][entry]['update_channel'])
-    manipulandStateModels.append(mstatemodel)
-    manipulandJointControllers.append(mjointcontroller)
