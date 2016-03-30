@@ -21,6 +21,7 @@ set(python_files
   director/cameraview.py
   director/colorize.py
   director/consoleapp.py
+  director/continuousmanippanel.py
   director/continuouswalkingdemo.py
   director/copmonitor.py
   director/coursemodel.py
