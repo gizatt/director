@@ -12,6 +12,7 @@ import director.tasks.robottasks as rt
 from director.timercallback import TimerCallback
 
 import os
+import functools
 import sys
 import vtkAll as vtk
 import numpy as np
@@ -24,10 +25,14 @@ class ContinuousManipPlanner(object):
         self.robotSystem = robotSystem
         self.robotModel = robotSystem.robotStateModel
         self.ikPlanner = robotSystem.ikPlanner
+        self.sensorJointController = robotSystem.robotStateJointController
+        self.manipPlanner = robotSystem.manipPlanner
         self.manipulandStateModel = manipulandStateModel
         self.manipulandLinkName = manipulandLinkName
         self.manipulatorStateModel = manipulatorStateModel
         self.manipulatorLinkName = manipulatorLinkName
+
+        self.plans = []
 
         self.grabFrameObj = None
         self.reachFrameObj = None
@@ -37,17 +42,20 @@ class ContinuousManipPlanner(object):
         self.handFrame = None
 
         self.targetLinkToGrabFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0], [0, 0, 0] )
-        self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.2], [0, 0, 0] )
-        self.eeLinkToHandFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.2], [0, 0, 0] )
+        # +x is forward for palm frame
+        self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [-0.2, 0, 0], [0, 0, 0] )
+        self.eeLinkToHandFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.0], [0, 0, 0] )
+
 
     def targetLinkToGrabFrameModified(self, grabFrameObj):
         self.targetLinkToGrabFrame = transformUtils.copyFrame(grabFrameObj.transform)
+        self.targetLinkToGrabFrame.PostMultiply()
         self.targetLinkToGrabFrame.Concatenate(self.manipulandStateModel.getLinkFrame(self.manipulandLinkName).GetLinearInverse())
 
     def grabToReachFrameModified(self, reachFrameObj):
         self.grabToReachFrame = transformUtils.copyFrame(reachFrameObj.transform)
-        self.grabToReachFrame.Concatenate(self.targetLinkToGrabFrame.GetLinearInverse())
         self.grabToReachFrame.Concatenate(self.manipulandStateModel.getLinkFrame(self.manipulandLinkName).GetLinearInverse())
+        self.grabToReachFrame.Concatenate(self.targetLinkToGrabFrame.GetLinearInverse())
 
     def eeLinkToHandFrameModified(self, handFrameObj):
         self.eeLinkToHandFrame = transformUtils.copyFrame(handFrameObj.transform)
@@ -94,6 +102,44 @@ class ContinuousManipPlanner(object):
         if self.manipulatorLinkName is not manipulatorLinkName:
             self.manipulatorLinkName = manipulatorLinkName
 
+    def addPlan(self, plan):
+        self.plans.append(plan)
+
+    def commitManipPlan(self):
+        self.manipPlanner.commitManipPlan(self.plans[-1])    
+
+    def planReach(self, side='left'):
+        self.planManipToGivenFrame(self.reachFrame, side)
+
+    def planGrab(self, side='left'):
+        self.planManipToGivenFrame(self.grabFrame, side)
+        
+    def planManipToGivenFrame(self, targetFrame, side='left'):
+        startPose = self.sensorJointController.getPose('EST_ROBOT_STATE') # ground truth start pose
+
+        startFrame = transformUtils.copyFrame(self.ikPlanner.getLinkFrameAtPose(self.manipulatorLinkName, startPose))
+        startFrame.PreMultiply()
+        startFrame.Concatenate(self.eeLinkToHandFrame)
+        #vis.updateFrame(startFrame, 'Start Frame', parent='estimation', visible=True, scale=0.2)
+
+        # calculate desired end pose by calculating difference between hand and target, and
+        # adding that to start pose
+        eeFrameError = transformUtils.copyFrame(targetFrame)
+        eeFrameError.PreMultiply()
+        eeFrameError.Concatenate(self.handFrame.GetLinearInverse())
+        #vis.updateFrame(eeFrameError, 'Error Frame', parent='estimation', visible=True, scale=0.2)
+
+        endFrame = transformUtils.copyFrame(startFrame)
+        endFrame.PostMultiply()
+        endFrame.Concatenate(eeFrameError)
+        #vis.updateFrame(endFrame, 'Target Frame', parent='estimation', visible=True, scale=0.2)
+
+        # eeLinkToHandFrame replaces the handlink -> palm transform
+        self.constraintSet = self.ikPlanner.planEndEffectorGoal(startPose, side, endFrame, lockBase=False, lockBack=True, graspToHandLinkFrame=self.eeLinkToHandFrame)
+        self.constraintSet.runIk()
+        plan = self.constraintSet.runIkTraj()
+        self.addPlan(plan)
+
 class ContinuousManipPanel(TaskUserPanel):
 
     def __init__(self, robotSystem, manipulandStateModels):
@@ -110,6 +156,8 @@ class ContinuousManipPanel(TaskUserPanel):
                                   self.params.getPropertyEnumValue('Manipuland Link'),
                                   self.manipulandStateModels[self.params.getProperty('Manipulator Name')],
                                   self.params.getPropertyEnumValue('Manipulator Link'))
+
+        self.addTasks()
 
         self.timerCallback = TimerCallback(10)
         self.timerCallback.callback = self.update
@@ -178,17 +226,21 @@ class ContinuousManipPanel(TaskUserPanel):
             self.folder = self.taskTree.addGroup(name, parent=parent)
             return self.folder
 
-        self.taskTree.removeAllTasks()
-        ###############
+        def addManipulation(func, name, parent=None, confirm=False):
+            group = self.taskTree.addGroup(name, parent=parent)
+            addFunc(func, name='plan motion', parent=group)
+            addTask(rt.CheckPlanInfo(name='check manip plan info'), parent=group)
+            addFunc(self.planner.commitManipPlan, name='execute manip plan', parent=group)
+            addTask(rt.IRBWaitForPlanExecution(name='wait for Timeout seconds for manip execution'), parent=group)
+                #if confirm:
+                  # addTask(rt.UserPromptTask(name='Confirm execution has finished', message='Continue when plan finishes.'), parent=group)
 
+        self.taskTree.removeAllTasks()
 
         # add the tasks
-
-        addFolder('Pre-grasp')
-        addTask(rt.PrintTask(name='display message', message='hello world'))
-        addTask(rt.DelayTask(name='wait', delayTime=1.0))
-        addTask(rt.UserPromptTask(name='prompt for user input', message='please press continue...'))
-        addFunc(self.planner.test, name='test planner')
+        if self.planner.ikPlanner.fixedBaseArm:
+            addManipulation(functools.partial(self.planner.planReach, 'left'), name='reach')
+            addManipulation(functools.partial(self.planner.planGrab, 'left'), name='grab')
 
 
 
