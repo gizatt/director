@@ -83,6 +83,7 @@ from director import screengrabberpanel
 from director import splinewidget
 from director import teleoppanel
 from director import continuousmanippanel
+from director import boxopenpanel
 from director import motionplanningpanel
 from director import vtkNumpy as vnp
 from director import visualization as vis
@@ -531,6 +532,7 @@ if usePlanning:
         manipulandStateModels.append(mstatemodel)
         manipulandJointControllers.append(mjointcontroller)
     continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
+    boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem)
 
     taskPanels = OrderedDict()
 
@@ -546,6 +548,7 @@ if usePlanning:
     taskPanels['Table'] = tableTaskPanel.widget
     taskPanels['Continuous Walking'] = continuousWalkingTaskPanel.widget
     taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
+    taskPanels['Box Open'] = boxOpenPanel.widget
     if useMappingPanel:
         taskPanels['Mapping'] = mappingTaskPanel.widget
 

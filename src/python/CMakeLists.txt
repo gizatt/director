@@ -14,6 +14,7 @@ set(python_files
   director/bihandeddemo.py
   director/blackoutmonitor.py
   director/botspy.py
+  director/boxopenpanel.py
   director/callbacks.py
   director/camerabookmarks.py
   director/cameracontrol.py
