@@ -25,10 +25,13 @@ from director import segmentation
 from director import affordanceupdater
 from director import robotstate
 
+# Adding from contmanippanel
+from director.timercallback import TimerCallback
+
 
 class BoxPushTaskPlanner(object):
 
-    def __init__(self, robotSystem):
+    def __init__(self, robotSystem, manipulandStateModel, manipulandLinkName, manipulatorStateModel, manipulatorLinkName):
         self.robotSystem = robotSystem
         self.robotModel = robotSystem.robotStateModel
         self.ikPlanner = robotSystem.ikPlanner
@@ -45,15 +48,83 @@ class BoxPushTaskPlanner(object):
         self.reachDist = 0.09
         self.view = robotSystem.view
 
+        #Manipuland
+        self.manipulandStateModel = manipulandStateModel
+        self.manipulandLinkName = manipulandLinkName
+        self.manipulatorStateModel = manipulatorStateModel
+        self.manipulatorLinkName = manipulatorLinkName
 
-    def test(self):
-        print 'test'
-        assert True
+        self.grabFrameObj = None
+        self.reachFrameObj = None
+        self.handFrameObj = None
+        self.grabFrame = None
+        self.reachFrame = None
+        self.handFrame = None
 
+        self.targetLinkToGrabFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0], [0, 0, 0] )
+        # +x is forward for palm frame
+        self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [-0.2, 0, 0], [0, 0, 0] )
+        self.eeLinkToHandFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.0], [0, 0, 0] )
+
+    def targetLinkToGrabFrameModified(self, grabFrameObj):
+        self.targetLinkToGrabFrame = transformUtils.copyFrame(grabFrameObj.transform)
+        self.targetLinkToGrabFrame.PostMultiply()
+        self.targetLinkToGrabFrame.Concatenate(self.manipulandStateModel.getLinkFrame(self.manipulandLinkName).GetLinearInverse())
+
+    def grabToReachFrameModified(self, reachFrameObj):
+        self.grabToReachFrame = transformUtils.copyFrame(reachFrameObj.transform)
+        self.grabToReachFrame.Concatenate(self.manipulandStateModel.getLinkFrame(self.manipulandLinkName).GetLinearInverse())
+        self.grabToReachFrame.Concatenate(self.targetLinkToGrabFrame.GetLinearInverse())
+
+    def eeLinkToHandFrameModified(self, handFrameObj):
+        self.eeLinkToHandFrame = transformUtils.copyFrame(handFrameObj.transform)
+        self.eeLinkToHandFrame.Concatenate(self.manipulatorStateModel.getLinkFrame(self.manipulatorLinkName).GetLinearInverse())
+    
+    def update(self):
+        self.grabFrame = transformUtils.copyFrame( self.manipulandStateModel.getLinkFrame(self.manipulandLinkName) )
+        self.grabFrame.PreMultiply()
+        self.grabFrame.Concatenate( self.targetLinkToGrabFrame )
+        vis.updateFrame(self.grabFrame, 'Manipuland Grab Frame', parent='estimation', visible=True, scale=0.2)
+        
+        grabFrameObj = om.findObjectByName('Manipuland Grab Frame')
+        if grabFrameObj != self.grabFrameObj:
+            self.grabFrameObj = grabFrameObj
+            self.targetLinkToGrabFrameCallback = self.grabFrameObj.connectFrameModified(self.targetLinkToGrabFrameModified)
+
+        self.reachFrame = transformUtils.copyFrame(self.grabFrame)
+        self.reachFrame.PreMultiply()
+        self.reachFrame.Concatenate(self.grabToReachFrame)
+        vis.updateFrame(self.reachFrame, 'Manipuland Reach Frame', parent='estimation', visible=True, scale=0.2)
+        
+        reachFrameObj = om.findObjectByName('Manipuland Reach Frame')
+        if reachFrameObj != self.reachFrameObj:
+            self.reachFrameObj = reachFrameObj
+            self.grabToReachFrameCallback = self.reachFrameObj.connectFrameModified(self.grabToReachFrameModified)
+
+        self.handFrame = transformUtils.copyFrame(self.manipulatorStateModel.getLinkFrame(self.manipulatorLinkName))
+        self.handFrame.PreMultiply()
+        self.handFrame.Concatenate(self.eeLinkToHandFrame)
+        vis.updateFrame(self.handFrame, 'Manipulator Hand Frame', parent='estimation', visible=True, scale=0.2)
+        
+        handFrameObj = om.findObjectByName('Manipulator Hand Frame')
+        if handFrameObj != self.handFrameObj:
+            self.handFrameObj = handFrameObj
+            self.eeLinkToHandFrameCallback = self.handFrameObj.connectFrameModified(self.eeLinkToHandFrameModified)
+
+    def updateModels(self, manipulandStateModel, manipulandLinkName, manipulatorStateModel, manipulatorLinkName):
+        if self.manipulandStateModel is not manipulandStateModel:
+            self.manipulandStateModel = manipulandStateModel
+        if self.manipulandLinkName is not manipulandLinkName:
+            self.manipulandLinkName = manipulandLinkName
+        if self.manipulatorStateModel is not manipulatorStateModel:
+            self.manipulatorStateModel = manipulatorStateModel
+        if self.manipulatorLinkName is not manipulatorLinkName:
+            self.manipulatorLinkName = manipulatorLinkName
     
     def addPlan(self, plan):
         self.plans.append(plan)
-
+    
+    ## Start Box Push Commands 
     def computeRobotStanceFrame(self, objectTransform, relativeStanceTransform):
         '''
         Given a robot model, determine the height of the ground using an XY and
@@ -98,33 +169,10 @@ class BoxPushTaskPlanner(object):
             transformUtils.frameFromPositionAndRPY(self.relativeStanceXYZ, self.relativeStanceRPY))    
 
     def spawnBoxAffordance(self):
-        # radius = 0.20
-        # tubeRadius = 0.02
-        # position = [0, 0, 1.2]
-        # rpy = [0, 0, 0]
-        # t_feet_mid = self.footstepPlanner.getFeetMidPoint(self.robotModel)
-        # t = transformUtils.frameFromPositionAndRPY(position, rpy)
-        # t_grasp = self.computeRelativeGraspTransform()
-        # t_grasp.Concatenate(t)
-        # t_stance = self.computeRobotStanceFrame(t_grasp, self.computeRelativeStanceTransform())
-        # t_valve = t_stance.GetInverse()
-
-        # # This is necessary to get the inversion to actually happen. We don't know why.
-        # t_valve.GetMatrix()
-
-        # t_valve.Concatenate(t)
-        # t_valve.Concatenate(t_feet_mid)
-        # pose = transformUtils.poseFromTransform(t_valve)
-
-        #TODO This should look for a box iten not valve or capsule ring, but dont know how to do this yet
         pose = (array([ 1.20,  0. , 0.8]), array([ 1.,  0.,  0.,  0.]))
         desc = dict(classname='BoxAffordanceItem', Name='box', uuid=newUUID(), pose=pose, Color=[0.66, 0.66, 0.66], Dimensions=[0.25,0.25,0.25])
         obj = self.affordanceManager.newAffordanceFromDescription(desc)
 
-        #TODO Shoudl look for a box now from desc; need to give params of sides instead of radius
-        # obj = segmentation.affordanceManager.newAffordanceFromDescription(desc)
-        # obj.params = dict(radius=radius)
-    
     def getEstimatedRobotStatePose(self):
         return self.sensorJointController.getPose('EST_ROBOT_STATE')
 
@@ -148,7 +196,10 @@ class BoxPushTaskPlanner(object):
 
         #TODO change this to box object pose! not next object
         #obj, frame = self.getNextTableObject(side)
-        obj = om.findObjectByName('box')
+        #obj = om.findObjectByName('box')
+        #frame = om.findObjectByName('box frame')
+
+        obj = om.findObjectByName('cardboard_box')
         frame = om.findObjectByName('box frame')
 
         startPose = self.getPlanningStartPose()
@@ -194,10 +245,43 @@ class BoxPushTaskPlanner(object):
         print 'planning touch'
         plan = self.constraintSet.runIkTraj()
         self.addPlan(plan)
+     ## End Box Push Commands
 
     def commitManipPlan(self):
-        self.manipPlanner.commitManipPlan(self.plans[-1])    
-   
+        self.manipPlanner.commitManipPlan(self.plans[-1])  
+    
+    ## TODO need these last 3?
+    def planReach(self, side='left'):
+        self.planManipToGivenFrame(self.reachFrame, side)
+
+    def planGrab(self, side='left'):
+        self.planManipToGivenFrame(self.grabFrame, side)
+        
+    def planManipToGivenFrame(self, targetFrame, side='left'):
+        startPose = self.sensorJointController.getPose('EST_ROBOT_STATE') # ground truth start pose
+
+        startFrame = transformUtils.copyFrame(self.ikPlanner.getLinkFrameAtPose(self.manipulatorLinkName, startPose))
+        startFrame.PreMultiply()
+        startFrame.Concatenate(self.eeLinkToHandFrame)
+        #vis.updateFrame(startFrame, 'Start Frame', parent='estimation', visible=True, scale=0.2)
+
+        # calculate desired end pose by calculating difference between hand and target, and
+        # adding that to start pose
+        eeFrameError = transformUtils.copyFrame(targetFrame)
+        eeFrameError.PreMultiply()
+        eeFrameError.Concatenate(self.handFrame.GetLinearInverse())
+        #vis.updateFrame(eeFrameError, 'Error Frame', parent='estimation', visible=True, scale=0.2)
+
+        endFrame = transformUtils.copyFrame(startFrame)
+        endFrame.PostMultiply()
+        endFrame.Concatenate(eeFrameError)
+        #vis.updateFrame(endFrame, 'Target Frame', parent='estimation', visible=True, scale=0.2)
+
+        # eeLinkToHandFrame replaces the handlink -> palm transform
+        self.constraintSet = self.ikPlanner.planEndEffectorGoal(startPose, side, endFrame, lockBase=False, lockBack=True, graspToHandLinkFrame=self.eeLinkToHandFrame)
+        self.constraintSet.runIk()
+        plan = self.constraintSet.runIkTraj()
+        self.addPlan(plan)
 
 class BoxImageFitter(ImageBasedAffordanceFit):
 
@@ -208,26 +292,23 @@ class BoxImageFitter(ImageBasedAffordanceFit):
     def fit(self, polyData, points):
         pass
 
-# class ValveImageFitter(ImageBasedAffordanceFit):
-
-#     def __init__(self, valveDemo):
-#         ImageBasedAffordanceFit.__init__(self, numberOfPoints=2)
-#         self.valveDemo = valveDemo
-
-#     def onImageViewDoubleClick(self, displayPoint, modifiers, imageView):
-#         self.valveDemo.onImageViewDoubleClick(displayPoint, modifiers, imageView)
-
-#     def fit(self, polyData, points):
-#         om.removeFromObjectModel(om.findObjectByName('valve'))
-#         segmentation.segmentValveByRim(polyData, points[0], points[1])
-
 class BoxOpenPanel(TaskUserPanel):
 
-    def __init__(self, robotSystem):
+    def __init__(self, robotSystem, manipulandStateModels):
 
         TaskUserPanel.__init__(self, windowTitle='Example Box Pushing Task')
 
-        self.boxpushdemo = BoxPushTaskPlanner(robotSystem)
+
+        self.manipulandStateModels = manipulandStateModels
+        availableManipulandNames = [stateModel.getProperty('Name') for stateModel in manipulandStateModels]
+        self.params.addProperty('Manipuland Name', 0, attributes=om.PropertyAttributes(enumNames=availableManipulandNames))
+        self.params.addProperty('Manipulator Name', 1, attributes=om.PropertyAttributes(enumNames=availableManipulandNames))
+        self.updateLinkChoice()
+
+        self.boxpushdemo = BoxPushTaskPlanner(robotSystem, self.manipulandStateModels[self.params.getProperty('Manipuland Name')],
+                                  self.params.getPropertyEnumValue('Manipuland Link'),
+                                  self.manipulandStateModels[self.params.getProperty('Manipulator Name')],
+                                  self.params.getPropertyEnumValue('Manipulator Link'))
         self.fitter = BoxImageFitter(self.boxpushdemo)
         self.initImageView(self.fitter.imageView)
 
@@ -235,74 +316,72 @@ class BoxOpenPanel(TaskUserPanel):
         self.addButtons()
         self.addTasks()
 
+        self.timerCallback = TimerCallback(10)
+        self.timerCallback.callback = self.update
+        self.timerCallback.start()
+
+    def updateLinkChoice(self):
+        manipulandStateModel = self.manipulandStateModels[self.params.getProperty('Manipuland Name')]
+        manipulatorStateModel = self.manipulandStateModels[self.params.getProperty('Manipulator Name')]
+        if not self.params.hasProperty('Manipuland Link'):
+            self.params.addProperty('Manipuland Link', 0, attributes=om.PropertyAttributes(enumNames=[str(x) for x in manipulandStateModel.model.getLinkNames()]))
+        else:
+            self.params.setProperty('Manipuland Link', 0)
+            self.params.setPropertyAttribute('Manipuland Link', 'enumNames', [str(x) for x in manipulandStateModel.model.getLinkNames()])
+
+        if not self.params.hasProperty('Manipulator Link'):
+            self.params.addProperty('Manipulator Link', 0, attributes=om.PropertyAttributes(enumNames=[str(x) for x in manipulatorStateModel.model.getLinkNames()]))
+        else:
+            self.params.setProperty('Manipulator Link', 0)
+            self.params.setPropertyAttribute('Manipulator Link', 'enumNames', [str(x) for x in manipulatorStateModel.model.getLinkNames()])
+    
+    def update(self):
+        self.boxpushdemo.update()
+    
     def addButtons(self):
-        self.addManualButton('box button', self.boxpushdemo.test)
         self.addManualSpacer()
         self.addManualButton('Spawn Box', self.onSpawnBoxClicked)
     
     #Needed to define hand properties for ABB 
-    def addDefaultProperties(self):
-        # TODO: if there is a way not to display a property where there is only one value, that'd be great
-
-            # Hard-coded left for now per convention, can also be generic per drcargs.getDirectorConfig()['handCombinations']['side']
-        self.params.addProperty('Hand', 0,
-                                attributes=om.PropertyAttributes(enumNames=['Left']))
-
-        #if self.tableDemo.ikPlanner.fixedBaseArm:
-        self.params.addProperty('Base', 0,
-                                attributes=om.PropertyAttributes(enumNames=['Fixed']))
-        self.params.addProperty('Back', 0,
-                                attributes=om.PropertyAttributes(enumNames=['Fixed']))
-
-        # Hand control for Kuka LWR / Schunk SDH
-        if 'userConfig' in drcargs.getDirectorConfig() and 'useKuka' in drcargs.getDirectorConfig()['userConfig']:
-            self.params.addProperty('Hand Engaged (Powered)', False)
-
-        # Init values as above
-        self.boxpushdemo.graspingHand = self.getSide()
-        self.boxpushdemo.lockBase = self.getLockBase()
-        self.boxpushdemo.lockBack = self.getLockBack()
-        self.boxpushdemo.sceneID = self.getSceneId()
-        self.boxpushdemo.sceneName = self.getSceneName()
-        self.boxpushdemo.planner = self.getPlanner()
-        if 'userConfig' in drcargs.getDirectorConfig() and 'useKuka' in drcargs.getDirectorConfig()['userConfig']:
-            self.handEngaged = self.getHandEngaged() # WARNING: does not check current state [no status message]    
-
-    def getSide(self):
-        return self.params.getPropertyEnumValue('Hand').lower()
-
-    def getLockBase(self):
-        return True if self.params.getPropertyEnumValue('Base') == 'Fixed' else False
-
-    def getLockBack(self):
-        return True if self.params.getPropertyEnumValue('Back') == 'Fixed' else False
-
-    def getHandEngaged(self):
-        return self.params.getProperty('Hand Engaged (Powered)')
-
-    def getSceneId(self):
-        return self.params.getProperty('Scene') if self.params.hasProperty('Scene') else None
-
-    def getSceneName(self):
-        return self.params.getPropertyEnumValue('Scene') if self.params.hasProperty('Scene') else None
-
-    def getPlanner(self):
-        return self.params.getPropertyEnumValue('Planner') if self.params.hasProperty('Planner') else None
-    #    
+    #def addDefaultProperties(self):
+    
+    # User-defined box    
     def onSpawnBoxClicked(self):
         self.boxpushdemo.spawnBoxAffordance()
 
     def testPrint(self):
         self.appendMessage('test')
 
-    # def addDefaultProperties(self):
-    #     self.params.addProperty('Example bool', True)
-    #     self.params.addProperty('Example enum', 0, attributes=om.PropertyAttributes(enumNames=['Left', 'Right']))
-    #     self.params.addProperty('Example double', 1.0, attributes=om.PropertyAttributes(singleStep=0.01, decimals=3))
+    def addDefaultProperties(self):
+        self.params.addProperty('Hand', 0, attributes=om.PropertyAttributes(enumNames=['Left']))
+        self.boxpushdemo.graspingHand = self.getSide()
+        self.boxpushdemo.planner = self.getPlanner()
+
+    def getSide(self):
+        return self.params.getPropertyEnumValue('Hand').lower()
+
+    def getPlanner(self):
+        return self.params.getPropertyEnumValue('Planner') if self.params.hasProperty('Planner') else None
 
     def onPropertyChanged(self, propertySet, propertyName):
-          self.appendMessage('property changed: <b>%s</b>' % propertyName)
-          self.appendMessage('  new value: %r' % self.params.getProperty(propertyName))
+        self.appendMessage('property changed: <b>%s</b>' % propertyName)
+        self.appendMessage('  new value: %r' % self.params.getProperty(propertyName))
+
+        if (propertyName == 'Manipuland Name'):
+            self.updateLinkChoice()
+        elif (propertyName == 'Manipulator Name'):
+            self.updateLinkChoice()
+        elif (propertyName == 'Manipuland Link'):
+            self.appendMessage("New target link")
+        elif (propertyName == 'Manipulator Link'):
+            self.appendMessage("New EE link")
+        else:
+            self.appendMessage("unknown property changed!?")
+
+        self.boxpushdemo.updateModels(self.manipulandStateModels[self.params.getProperty('Manipuland Name')],
+                                  self.params.getPropertyEnumValue('Manipuland Link'),
+                                  self.manipulandStateModels[self.params.getProperty('Manipulator Name')],
+                                  self.params.getPropertyEnumValue('Manipulator Link'))
 
     def addTasks(self):
 
@@ -325,8 +404,6 @@ class BoxOpenPanel(TaskUserPanel):
             side = self.params.getPropertyEnumValue('Hand')
 
             checkStatus = False  # whether to confirm that there is an object in the hand when closed
-            if 'userConfig' in drcargs.getDirectorConfig() and 'useKuka' in drcargs.getDirectorConfig()['userConfig']:
-                checkStatus = True
 
             if mode == 'open':
                 addTask(rt.OpenHand(name='open grasp hand', side=side, CheckStatus=checkStatus), parent=group)
@@ -347,6 +424,7 @@ class BoxOpenPanel(TaskUserPanel):
                   # addTask(rt.UserPromptTask(name='Confirm execution has finished', message='Continue when plan finishes.'), parent=group)
 
         self.taskTree.removeAllTasks()
+
         ###############
         v = self.boxpushdemo
 
@@ -367,13 +445,6 @@ class BoxOpenPanel(TaskUserPanel):
             addManipulation(functools.partial(v.planPreGrasp, v.graspingHand ), name='raise arm')
             addManipulation(functools.partial(v.planReachToTableObject, v.graspingHand), name='reach')
             addManipulation(functools.partial(v.planTouchTableObject, v.graspingHand), name='touch')
-
-        #tasks =self.taskTree.addGroup('Tasks')
-        #addTask(rt.PrintTask(name='display message', message='hello world!@'))
-        #addTask(rt.DelayTask(name='wait', delayTime=1.0))
-        #addTask(rt.UserPromptTask(name='prompt for user input', message='please press continue...'))
-        #addFunc(self.planner.test, name='test planner')
-        #addGrasping('open', name='open hand', parent='tasks', confirm=False)
 
 
 
