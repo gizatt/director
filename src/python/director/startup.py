@@ -532,7 +532,7 @@ if usePlanning:
         manipulandStateModels.append(mstatemodel)
         manipulandJointControllers.append(mjointcontroller)
     continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
-    boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem)
+    boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem, manipulandStateModels)
 
     taskPanels = OrderedDict()
 
