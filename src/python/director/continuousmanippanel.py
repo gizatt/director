@@ -41,11 +41,16 @@ class ContinuousManipPlanner(object):
         self.reachFrame = None
         self.handFrame = None
 
-        self.targetLinkToGrabFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0], [0, 0, 0] )
-        # +x is forward for palm frame
-        self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [-0.2, 0, 0], [0, 0, 0] )
-        self.eeLinkToHandFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.0], [0, 0, 0] )
+        self.resetHand()
+        self.resetReachAndGrab()
 
+    def resetHand(self):
+        # +x is forward for palm frame
+        self.eeLinkToHandFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.0], [0, 0, 0] )
+        
+    def resetReachAndGrab(self):
+        self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [-0.2, 0, 0], [0, 0, 0] )
+        self.targetLinkToGrabFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0], [0, 0, 0] )
 
     def targetLinkToGrabFrameModified(self, grabFrameObj):
         self.targetLinkToGrabFrame = transformUtils.copyFrame(grabFrameObj.transform)
@@ -60,6 +65,7 @@ class ContinuousManipPlanner(object):
     def eeLinkToHandFrameModified(self, handFrameObj):
         self.eeLinkToHandFrame = transformUtils.copyFrame(handFrameObj.transform)
         self.eeLinkToHandFrame.Concatenate(self.manipulatorStateModel.getLinkFrame(self.manipulatorLinkName).GetLinearInverse())
+
 
     def update(self):
         self.grabFrame = transformUtils.copyFrame( self.manipulandStateModel.getLinkFrame(self.manipulandLinkName) )
@@ -158,8 +164,9 @@ class ContinuousManipPanel(TaskUserPanel):
                                   self.params.getPropertyEnumValue('Manipulator Link'))
 
         self.addTasks()
+        self.addButtons()
 
-        self.timerCallback = TimerCallback(10)
+        self.timerCallback = TimerCallback(100)
         self.timerCallback.callback = self.update
         self.timerCallback.start()
 
@@ -201,7 +208,8 @@ class ContinuousManipPanel(TaskUserPanel):
         self.planner.update()
 
     def addButtons(self):
-        self.addManualButton('example button', self.planner.test)
+        self.addManualButton('resetReachAndGrab', self.planner.resetReachAndGrab)
+        self.addManualButton('resetHand', self.planner.resetHand)
 
     def testPrint(self):
         self.appendMessage('test')
@@ -236,6 +244,7 @@ class ContinuousManipPanel(TaskUserPanel):
                   # addTask(rt.UserPromptTask(name='Confirm execution has finished', message='Continue when plan finishes.'), parent=group)
 
         self.taskTree.removeAllTasks()
+
 
         # add the tasks
         if self.planner.ikPlanner.fixedBaseArm:
