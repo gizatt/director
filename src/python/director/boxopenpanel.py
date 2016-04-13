@@ -61,9 +61,11 @@ class BoxPushTaskPlanner(object):
         self.reachFrame = None
         self.handFrame = None
 
+        # Grabbing frame Relative to manipuland link
         self.targetLinkToGrabFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0], [0, 0, 0] )
-        # +x is forward for palm frame
+        # +x is forward for palm frame; Reaching frame relative to grab frame
         self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [-0.2, 0, 0], [0, 0, 0] )
+        # Thumb position relative to manipulator link
         self.eeLinkToHandFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.0], [0, 0, 0] )
 
     def targetLinkToGrabFrameModified(self, grabFrameObj):
@@ -251,6 +253,30 @@ class BoxPushTaskPlanner(object):
         self.manipPlanner.commitManipPlan(self.plans[-1])  
     
     ## TODO need these last 3?
+    def planManip(self, task, side='left', ):
+        # [task_name, manipulator link, hand frame, manipuland link, reach frame, grab frame]
+        arm = task[1]     # manipulator link
+        handFrame = task[2]    # hand fram relative to manipulator
+        mland = task[3]   # manipuiland frame
+        reachFrame = task[4]   #reach frame relative to grab frame
+        grabFrame = task[5]    #reach frame relative to manipuland frame
+
+        # Grabbing frame Relative to manipuland link
+        self.targetLinkToGrabFrame = reachFrame
+        # +x is forward for palm frame; Reaching frame relative to grab frame
+        self.grabToReachFrame = grabFrame
+        # Thumb position relative to manipulator link
+        self.eeLinkToHandFrame = handFrame
+
+        self.manipulatorLinkName = arm
+        self.manipulandLinkName = mland
+        
+        self.update()
+
+        #figure out which frame to grab
+        #self.planManipToGivenFrame(self.reachFrame, side)
+        #self.planManipToGivenFrame(self.grabFrame, side)
+
     def planReach(self, side='left'):
         self.planManipToGivenFrame(self.reachFrame, side)
 
@@ -258,7 +284,7 @@ class BoxPushTaskPlanner(object):
         self.planManipToGivenFrame(self.grabFrame, side)
         
     def planManipToGivenFrame(self, targetFrame, side='left'):
-        startPose = self.sensorJointController.getPose('EST_ROBOT_STATE') # ground truth start pose
+        startPos.e = self.sensorJointController.getPose('EST_ROBOT_STATE') # ground truth start pose
 
         startFrame = transformUtils.copyFrame(self.ikPlanner.getLinkFrameAtPose(self.manipulatorLinkName, startPose))
         startFrame.PreMultiply()
@@ -287,7 +313,7 @@ class BoxImageFitter(ImageBasedAffordanceFit):
 
     def __init__(self, boxpushdemo):
         ImageBasedAffordanceFit.__init__(self, numberOfPoints=1)
-        self.boxpushdemo = boxpushdemo
+        self.planner = boxpushdemo
 
     def fit(self, polyData, points):
         pass
@@ -305,18 +331,18 @@ class BoxOpenPanel(TaskUserPanel):
         self.params.addProperty('Manipulator Name', 1, attributes=om.PropertyAttributes(enumNames=availableManipulandNames))
         self.updateLinkChoice()
 
-        self.boxpushdemo = BoxPushTaskPlanner(robotSystem, self.manipulandStateModels[self.params.getProperty('Manipuland Name')],
+        self.planner = BoxPushTaskPlanner(robotSystem, self.manipulandStateModels[self.params.getProperty('Manipuland Name')],
                                   self.params.getPropertyEnumValue('Manipuland Link'),
                                   self.manipulandStateModels[self.params.getProperty('Manipulator Name')],
                                   self.params.getPropertyEnumValue('Manipulator Link'))
-        self.fitter = BoxImageFitter(self.boxpushdemo)
+        self.fitter = BoxImageFitter(self.planner)
         self.initImageView(self.fitter.imageView)
 
         self.addDefaultProperties()
         self.addButtons()
         self.addTasks()
 
-        self.timerCallback = TimerCallback(10)
+        self.timerCallback = TimerCallback(50)
         self.timerCallback.callback = self.update
         self.timerCallback.start()
 
@@ -336,7 +362,7 @@ class BoxOpenPanel(TaskUserPanel):
             self.params.setPropertyAttribute('Manipulator Link', 'enumNames', [str(x) for x in manipulatorStateModel.model.getLinkNames()])
     
     def update(self):
-        self.boxpushdemo.update()
+        self.planner.update()
     
     def addButtons(self):
         self.addManualSpacer()
@@ -347,15 +373,15 @@ class BoxOpenPanel(TaskUserPanel):
     
     # User-defined box    
     def onSpawnBoxClicked(self):
-        self.boxpushdemo.spawnBoxAffordance()
+        self.planner.spawnBoxAffordance()
 
     def testPrint(self):
         self.appendMessage('test')
 
     def addDefaultProperties(self):
         self.params.addProperty('Hand', 0, attributes=om.PropertyAttributes(enumNames=['Left']))
-        self.boxpushdemo.graspingHand = self.getSide()
-        self.boxpushdemo.planner = self.getPlanner()
+        self.planner.graspingHand = self.getSide()
+        self.planner.planner = self.getPlanner()
 
     def getSide(self):
         return self.params.getPropertyEnumValue('Hand').lower()
@@ -378,14 +404,13 @@ class BoxOpenPanel(TaskUserPanel):
         else:
             self.appendMessage("unknown property changed!?")
 
-        self.boxpushdemo.updateModels(self.manipulandStateModels[self.params.getProperty('Manipuland Name')],
+        self.planner.updateModels(self.manipulandStateModels[self.params.getProperty('Manipuland Name')],
                                   self.params.getPropertyEnumValue('Manipuland Link'),
                                   self.manipulandStateModels[self.params.getProperty('Manipulator Name')],
                                   self.params.getPropertyEnumValue('Manipulator Link'))
 
     def addTasks(self):
-
-        ############
+     ############
         # some helpers
         self.folder = None
         def addTask(task, parent=None):
@@ -397,54 +422,106 @@ class BoxOpenPanel(TaskUserPanel):
             self.folder = self.taskTree.addGroup(name, parent=parent)
             return self.folder
 
-        #Additions from tabledemo.py     
-        def addGrasping(mode, name, parent=None, confirm=False):
-            assert mode in ('open', 'close')
-            group = self.taskTree.addGroup(name, parent=parent)
-            side = self.params.getPropertyEnumValue('Hand')
+        def addReach(group):
+            addFunc(functools.partial(self.planner.planReach, 'left'), name='plan reach', parent=group)
+            addTask(rt.CheckPlanInfo(name='check reach plan info'), parent=group)
+            addFunc(self.planner.commitManipPlan, name='execute reach plan', parent=group)
+            addTask(rt.IRBWaitForPlanExecution(name='wait for Timeout seconds for manip execution'), parent=group)
 
-            checkStatus = False  # whether to confirm that there is an object in the hand when closed
+        def addGrab(group):
+            addFunc(functools.partial(self.planner.planGrab, 'left'), name='plan touch', parent=group)
+            addTask(rt.CheckPlanInfo(name='check touch plan info'), parent=group)
+            addFunc(self.planner.commitManipPlan, name='execute touch plan', parent=group)
+            addTask(rt.IRBWaitForPlanExecution(name='wait for Timeout seconds for manip execution'), parent=group)
 
-            if mode == 'open':
-                addTask(rt.OpenHand(name='open grasp hand', side=side, CheckStatus=checkStatus), parent=group)
-            else:
-                addTask(rt.CloseHand(name='close grasp hand', side=side, CheckStatus=checkStatus), parent=group)
-            if confirm:
-                addTask(rt.UserPromptTask(name='Confirm grasping has succeeded', message='Continue when grasp finishes.'),
-                        parent=group)
+        def addManipulation(task, parent=None, confirm=False):
+            group = self.taskTree.addGroup(task[0], parent=parent)
 
-        def addManipulation(func, name, parent=None, confirm=False):
-            group = self.taskTree.addGroup(name, parent=parent)
-            addFunc(func, name='plan motion', parent=group)
-            addTask(rt.CheckPlanInfo(name='check manip plan info'), parent=group)
-            addFunc(v.commitManipPlan, name='execute manip plan', parent=group)
-            if self.boxpushdemo.planner != 1:
-                addTask(rt.IRBWaitForPlanExecution(name='wait for Timeout seconds for manip execution'), parent=group)
-                #if confirm:
-                  # addTask(rt.UserPromptTask(name='Confirm execution has finished', message='Continue when plan finishes.'), parent=group)
+            # setup the frames within the planner
+            addFunc(functools.partial(self.planner.setupManip(task)), name='setup frames', parent=group)
+            addReach(group)
+            addGrab(group)
+
+        self.plannedManipFrames = [] # [task_name, manipulator link, hand frame, manipuland link, reach frame, grab frame]
+        self.plannedManipFrames.append( 
+            ('touch_lid_ny',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.2770374 , -0.06806593, -0.00067259]), array([ 0.99775011, -0.06254857,  0.02250027,  0.00872502])),
+            'box_lid_ny', 
+            transformUtils.transformFromPose(array([-0.04590501, -0.10643155, -0.01407311]), array([ 0.61070215, -0.63255791,  0.3139515 , -0.35825666])),
+            transformUtils.transformFromPose(array([-0.04590501, -0.10606422, -0.01661653]), array([ 0.61822915, -0.62520345,  0.31821679, -0.35447348]))
+            ) )
 
         self.taskTree.removeAllTasks()
 
-        ###############
-        v = self.boxpushdemo
+        for task in self.plannedManipFrames:
+            addManipulation(task)
 
-        # graspingHand is 'left', side is 'Left'
-        side = self.params.getPropertyEnumValue('Hand')
+        # TODO: bind these to buttons
+        if self.planner.ikPlanner.fixedBaseArm:
+            addReach(None)
+            addGrab(None)
+            
+     #    ############
+     #    # some helpers
+     #    self.folder = None
+     #    def addTask(task, parent=None):
+     #        parent = parent or self.folder
+     #        self.taskTree.onAddTask(task, copy=False, parent=parent)
+     #    def addFunc(func, name, parent=None):
+     #        addTask(rt.CallbackTask(callback=func, name=name), parent=parent)
+     #    def addFolder(name, parent=None):
+     #        self.folder = self.taskTree.addGroup(name, parent=parent)
+     #        return self.folder
 
-        # add the tasks
+     #    #Additions from tabledemo.py     
+     #    def addGrasping(mode, name, parent=None, confirm=False):
+     #        assert mode in ('open', 'close')
+     #        group = self.taskTree.addGroup(name, parent=parent)
+     #        side = self.params.getPropertyEnumValue('Hand')
 
-	    # fit
-        fit = self.taskTree.addGroup('Fitting')
-        addTask(rt.UserPromptTask(name='fit box',
-                                  message='Please fit and approve box affordance.'), parent=fit)
-        addTask(rt.FindAffordance(name='check box affordance', affordanceName='box'),
-                parent=fit)
+     #        checkStatus = False  # whether to confirm that there is an object in the hand when closed
 
-        # lift object
-        if v.ikPlanner.fixedBaseArm:
-            addManipulation(functools.partial(v.planPreGrasp, v.graspingHand ), name='raise arm')
-            addManipulation(functools.partial(v.planReachToTableObject, v.graspingHand), name='reach')
-            addManipulation(functools.partial(v.planTouchTableObject, v.graspingHand), name='touch')
+     #        if mode == 'open':
+     #            addTask(rt.OpenHand(name='open grasp hand', side=side, CheckStatus=checkStatus), parent=group)
+     #        else:
+     #            addTask(rt.CloseHand(name='close grasp hand', side=side, CheckStatus=checkStatus), parent=group)
+     #        if confirm:
+     #            addTask(rt.UserPromptTask(name='Confirm grasping has succeeded', message='Continue when grasp finishes.'),
+     #                    parent=group)
+
+     #    def addManipulation(func, name, parent=None, confirm=False):
+     #        group = self.taskTree.addGroup(name, parent=parent)
+     #        addFunc(func, name='plan motion', parent=group)
+     #        addTask(rt.CheckPlanInfo(name='check manip plan info'), parent=group)
+     #        addFunc(v.commitManipPlan, name='execute manip plan', parent=group)
+     #        if self.planner.planner != 1:
+     #            addTask(rt.IRBWaitForPlanExecution(name='wait for Timeout seconds for manip execution'), parent=group)
+     #            #if confirm:
+     #              # addTask(rt.UserPromptTask(name='Confirm execution has finished', message='Continue when plan finishes.'), parent=group)
+
+     #    self.taskTree.removeAllTasks()
+
+     #    ###############
+     #    v = self.planner
+
+     #    # graspingHand is 'left', side is 'Left'
+     #    side = self.params.getPropertyEnumValue('Hand')
+
+     #    # add the tasks
+
+	    # # fit
+     #    fit = self.taskTree.addGroup('Fitting')
+     #    addTask(rt.UserPromptTask(name='fit box',
+     #                              message='Please fit and approve box affordance.'), parent=fit)
+     #    addTask(rt.FindAffordance(name='check box affordance', affordanceName='box'),
+     #            parent=fit)
+
+     #    # lift object
+     #    if v.ikPlanner.fixedBaseArm:
+     #        addManipulation(functools.partial(v.planPreGrasp, v.graspingHand ), name='raise arm')
+     #        addManipulation(functools.partial(v.planReachToTableObject, v.graspingHand), name='reach')
+     #        addManipulation(functools.partial(v.planTouchTableObject, v.graspingHand), name='touch')
 
 
 
