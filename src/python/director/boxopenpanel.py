@@ -86,9 +86,9 @@ class BoxPushTaskPlanner(object):
         self.grabFrame = transformUtils.copyFrame( self.manipulandStateModel.getLinkFrame(self.manipulandLinkName) )
         self.grabFrame.PreMultiply()
         self.grabFrame.Concatenate( self.targetLinkToGrabFrame )
-        vis.updateFrame(self.grabFrame, 'Manipuland Grab Frame', parent='estimation', visible=True, scale=0.2)
+        vis.updateFrame(self.grabFrame, 'BOP_Manipuland Grab Frame', parent='estimation', visible=True, scale=0.2)
         
-        grabFrameObj = om.findObjectByName('Manipuland Grab Frame')
+        grabFrameObj = om.findObjectByName('BOP_Manipuland Grab Frame')
         if grabFrameObj != self.grabFrameObj:
             self.grabFrameObj = grabFrameObj
             self.targetLinkToGrabFrameCallback = self.grabFrameObj.connectFrameModified(self.targetLinkToGrabFrameModified)
@@ -96,9 +96,9 @@ class BoxPushTaskPlanner(object):
         self.reachFrame = transformUtils.copyFrame(self.grabFrame)
         self.reachFrame.PreMultiply()
         self.reachFrame.Concatenate(self.grabToReachFrame)
-        vis.updateFrame(self.reachFrame, 'Manipuland Reach Frame', parent='estimation', visible=True, scale=0.2)
+        vis.updateFrame(self.reachFrame, 'BOP_Manipuland Reach Frame', parent='estimation', visible=True, scale=0.2)
         
-        reachFrameObj = om.findObjectByName('Manipuland Reach Frame')
+        reachFrameObj = om.findObjectByName('BOP_Manipuland Reach Frame')
         if reachFrameObj != self.reachFrameObj:
             self.reachFrameObj = reachFrameObj
             self.grabToReachFrameCallback = self.reachFrameObj.connectFrameModified(self.grabToReachFrameModified)
@@ -106,9 +106,9 @@ class BoxPushTaskPlanner(object):
         self.handFrame = transformUtils.copyFrame(self.manipulatorStateModel.getLinkFrame(self.manipulatorLinkName))
         self.handFrame.PreMultiply()
         self.handFrame.Concatenate(self.eeLinkToHandFrame)
-        vis.updateFrame(self.handFrame, 'Manipulator Hand Frame', parent='estimation', visible=True, scale=0.2)
+        vis.updateFrame(self.handFrame, 'BOP_Manipulator Hand Frame', parent='estimation', visible=True, scale=0.2)
         
-        handFrameObj = om.findObjectByName('Manipulator Hand Frame')
+        handFrameObj = om.findObjectByName('BOP_Manipulator Hand Frame')
         if handFrameObj != self.handFrameObj:
             self.handFrameObj = handFrameObj
             self.eeLinkToHandFrameCallback = self.handFrameObj.connectFrameModified(self.eeLinkToHandFrameModified)
@@ -252,19 +252,19 @@ class BoxPushTaskPlanner(object):
     def commitManipPlan(self):
         self.manipPlanner.commitManipPlan(self.plans[-1])  
     
-    ## TODO need these last 3?
-    def planManip(self, task, side='left', ):
+
+    def setupManip(self, task, side='left'):
         # [task_name, manipulator link, hand frame, manipuland link, reach frame, grab frame]
         arm = task[1]     # manipulator link
         handFrame = task[2]    # hand fram relative to manipulator
         mland = task[3]   # manipuiland frame
-        reachFrame = task[4]   #reach frame relative to grab frame
-        grabFrame = task[5]    #reach frame relative to manipuland frame
+        touchFrame = task[4]    #reach frame relative to manipuland frame
 
         # Grabbing frame Relative to manipuland link
-        self.targetLinkToGrabFrame = reachFrame
+        self.targetLinkToGrabFrame = touchFrame
         # +x is forward for palm frame; Reaching frame relative to grab frame
-        self.grabToReachFrame = grabFrame
+        self.grabToReachFrame = transformUtils.transformFromPose([0,0,0], [1,0,0,0])
+
         # Thumb position relative to manipulator link
         self.eeLinkToHandFrame = handFrame
 
@@ -274,7 +274,6 @@ class BoxPushTaskPlanner(object):
         self.update()
 
         #figure out which frame to grab
-        #self.planManipToGivenFrame(self.reachFrame, side)
         #self.planManipToGivenFrame(self.grabFrame, side)
 
     def planReach(self, side='left'):
@@ -284,7 +283,7 @@ class BoxPushTaskPlanner(object):
         self.planManipToGivenFrame(self.grabFrame, side)
         
     def planManipToGivenFrame(self, targetFrame, side='left'):
-        startPos.e = self.sensorJointController.getPose('EST_ROBOT_STATE') # ground truth start pose
+        startPose = self.sensorJointController.getPose('EST_ROBOT_STATE') # ground truth start pose
 
         startFrame = transformUtils.copyFrame(self.ikPlanner.getLinkFrameAtPose(self.manipulatorLinkName, startPose))
         startFrame.PreMultiply()
@@ -326,15 +325,30 @@ class BoxOpenPanel(TaskUserPanel):
 
 
         self.manipulandStateModels = manipulandStateModels
-        availableManipulandNames = [stateModel.getProperty('Name') for stateModel in manipulandStateModels]
-        self.params.addProperty('Manipuland Name', 0, attributes=om.PropertyAttributes(enumNames=availableManipulandNames))
-        self.params.addProperty('Manipulator Name', 1, attributes=om.PropertyAttributes(enumNames=availableManipulandNames))
+        self.manipulatorname = 'arm'
+        self.manipulandname = 'cardboard_box'
+
+        names = [stateModel.getProperty('Name') for stateModel in manipulandStateModels]
+
+        x=names.index(self.manipulatorname)
+        self.manipulator = manipulandStateModels[x]
+
+        x=names.index(self.manipulandname)
+        self.manipuland = manipulandStateModels[x]
+
+        # for x in manipulandStateModels.model.getLinkNames()
+        #     if str(x) == self.manipulandname
+        #         self.manipuland = manipulandStateModels[x]
+        #     if str(x) == self.manipulatorname
+        #         self.manipulator = manipulandStateModels[x]
+
+
         self.updateLinkChoice()
 
-        self.planner = BoxPushTaskPlanner(robotSystem, self.manipulandStateModels[self.params.getProperty('Manipuland Name')],
-                                  self.params.getPropertyEnumValue('Manipuland Link'),
-                                  self.manipulandStateModels[self.params.getProperty('Manipulator Name')],
-                                  self.params.getPropertyEnumValue('Manipulator Link'))
+        self.planner = BoxPushTaskPlanner(robotSystem, self.manipuland,
+                                  self.manipuland.model.getLinkNames()[0],
+                                  self.manipulator,
+                                  self.manipulator.model.getLinkNames()[0])
         self.fitter = BoxImageFitter(self.planner)
         self.initImageView(self.fitter.imageView)
 
@@ -347,20 +361,9 @@ class BoxOpenPanel(TaskUserPanel):
         self.timerCallback.start()
 
     def updateLinkChoice(self):
-        manipulandStateModel = self.manipulandStateModels[self.params.getProperty('Manipuland Name')]
-        manipulatorStateModel = self.manipulandStateModels[self.params.getProperty('Manipulator Name')]
-        if not self.params.hasProperty('Manipuland Link'):
-            self.params.addProperty('Manipuland Link', 0, attributes=om.PropertyAttributes(enumNames=[str(x) for x in manipulandStateModel.model.getLinkNames()]))
-        else:
-            self.params.setProperty('Manipuland Link', 0)
-            self.params.setPropertyAttribute('Manipuland Link', 'enumNames', [str(x) for x in manipulandStateModel.model.getLinkNames()])
-
-        if not self.params.hasProperty('Manipulator Link'):
-            self.params.addProperty('Manipulator Link', 0, attributes=om.PropertyAttributes(enumNames=[str(x) for x in manipulatorStateModel.model.getLinkNames()]))
-        else:
-            self.params.setProperty('Manipulator Link', 0)
-            self.params.setPropertyAttribute('Manipulator Link', 'enumNames', [str(x) for x in manipulatorStateModel.model.getLinkNames()])
-    
+        manipulandStateModel = self.manipuland
+        manipulatorStateModel = self.manipulator
+        
     def update(self):
         self.planner.update()
     
@@ -393,22 +396,6 @@ class BoxOpenPanel(TaskUserPanel):
         self.appendMessage('property changed: <b>%s</b>' % propertyName)
         self.appendMessage('  new value: %r' % self.params.getProperty(propertyName))
 
-        if (propertyName == 'Manipuland Name'):
-            self.updateLinkChoice()
-        elif (propertyName == 'Manipulator Name'):
-            self.updateLinkChoice()
-        elif (propertyName == 'Manipuland Link'):
-            self.appendMessage("New target link")
-        elif (propertyName == 'Manipulator Link'):
-            self.appendMessage("New EE link")
-        else:
-            self.appendMessage("unknown property changed!?")
-
-        self.planner.updateModels(self.manipulandStateModels[self.params.getProperty('Manipuland Name')],
-                                  self.params.getPropertyEnumValue('Manipuland Link'),
-                                  self.manipulandStateModels[self.params.getProperty('Manipulator Name')],
-                                  self.params.getPropertyEnumValue('Manipulator Link'))
-
     def addTasks(self):
      ############
         # some helpers
@@ -438,18 +425,35 @@ class BoxOpenPanel(TaskUserPanel):
             group = self.taskTree.addGroup(task[0], parent=parent)
 
             # setup the frames within the planner
-            addFunc(functools.partial(self.planner.setupManip(task)), name='setup frames', parent=group)
-            addReach(group)
+            addFunc(functools.partial(self.planner.setupManip, task), name='setup frames', parent=group)
+            #addReach(group)
             addGrab(group)
 
         self.plannedManipFrames = [] # [task_name, manipulator link, hand frame, manipuland link, reach frame, grab frame]
+
+
+        self.plannedManipFrames.append( 
+            ('prep_touch_lid_ny',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
+            'box_lid_ny', 
+            transformUtils.transformFromPose(array([-0.14844034,  0.00363105, -0.03874915]), array([ 0.61072786, -0.70531327, -0.01374443, -0.35966062]))
+            ) )
+
         self.plannedManipFrames.append( 
             ('touch_lid_ny',
             'link_6', 
-            transformUtils.transformFromPose(array([ 0.2770374 , -0.06806593, -0.00067259]), array([ 0.99775011, -0.06254857,  0.02250027,  0.00872502])),
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
             'box_lid_ny', 
-            transformUtils.transformFromPose(array([-0.04590501, -0.10643155, -0.01407311]), array([ 0.61070215, -0.63255791,  0.3139515 , -0.35825666])),
-            transformUtils.transformFromPose(array([-0.04590501, -0.10606422, -0.01661653]), array([ 0.61822915, -0.62520345,  0.31821679, -0.35447348]))
+            transformUtils.transformFromPose(array([-0.06750864, -0.10518526,  0.01421868]), array([-0.4891737 ,  0.67363407, -0.20124232,  0.51616641])),
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('slide_under_lid_py',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
+            'box_lid_py', 
+            transformUtils.transformFromPose(array([-0.07012549,  0.09637906,  0.028149  ]), array([ 0.57476232, -0.62602328,  0.36215418, -0.38286746]))
             ) )
 
         self.taskTree.removeAllTasks()
@@ -459,8 +463,8 @@ class BoxOpenPanel(TaskUserPanel):
 
         # TODO: bind these to buttons
         if self.planner.ikPlanner.fixedBaseArm:
-            addReach(None)
-            addGrab(None)
+            addReach('Extra')
+            addGrab('Extra')
             
      #    ############
      #    # some helpers
