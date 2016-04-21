@@ -1195,7 +1195,7 @@ class IRBWaitForPlanExecution(AsyncTask):
 
     @staticmethod
     def getDefaultProperties(properties):
-        properties.addProperty('Timeout', 8.0, attributes=propertyset.PropertyAttributes(minimum=0.0, maximum=1e4, singleStep=0.1, decimals=2))
+        properties.addProperty('Timeout', 4.0, attributes=propertyset.PropertyAttributes(minimum=0.0, maximum=1e4, singleStep=0.1, decimals=2))
 
     def promptUserForPlanRecommit(self):
         prompt = UserPromptTask(message='Plan appears dropped. Recommit?')
