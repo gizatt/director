@@ -304,6 +304,7 @@ class BoxPushTaskPlanner(object):
 
         # eeLinkToHandFrame replaces the handlink -> palm transform
         self.constraintSet = self.ikPlanner.planEndEffectorGoal(startPose, side, endFrame, lockBase=False, lockBack=True, graspToHandLinkFrame=self.eeLinkToHandFrame)
+        self.constraintSet.nominalPoseName='q_start'
         self.constraintSet.runIk()
         plan = self.constraintSet.runIkTraj()
         self.addPlan(plan)
@@ -423,13 +424,12 @@ class BoxOpenPanel(TaskUserPanel):
 
         def addManipulation(task, parent=None, confirm=False):
             group = self.taskTree.addGroup(task[0], parent=parent)
-
             # setup the frames within the planner
             addFunc(functools.partial(self.planner.setupManip, task), name='setup frames', parent=group)
             #addReach(group)
             addGrab(group)
 
-        self.plannedManipFrames = [] # [task_name, manipulator link, hand frame, manipuland link, reach frame, grab frame]
+        self.plannedManipFrames = [] # [task_name, manipulator link, hand frame, manipuland link, grab frame]
 
 
         self.plannedManipFrames.append( 
@@ -453,7 +453,119 @@ class BoxOpenPanel(TaskUserPanel):
             'link_6', 
             transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
             'box_lid_py', 
-            transformUtils.transformFromPose(array([-0.07012549,  0.09637906,  0.028149  ]), array([ 0.57476232, -0.62602328,  0.36215418, -0.38286746]))
+            transformUtils.transformFromPose(array([-0.07014771,  0.09655235,  0.02164498]), array([-0.49221811,  0.68231605, -0.23736393,  0.48561765]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('push_open_lid_py_1',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
+            'box_lid_py', 
+            transformUtils.transformFromPose(array([-0.08440133,  0.06643229, -0.06796792]), array([ 0.57253841, -0.62891126,  0.36167245, -0.38192072]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('push_open_lid_py_2',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
+            'box_lid_py', 
+            transformUtils.transformFromPose(array([-0.04451736,  0.04110726, -0.06619589]), array([ 0.62068669, -0.56271116,  0.47048396, -0.27703617]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('push_open_lid_py_3',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
+            'box_lid_py', 
+            transformUtils.transformFromPose(array([-0.04643044,  0.04453561, -0.07002755]), array([ 0.66069153, -0.46680209,  0.56662106, -0.15659848]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('push_open_lid_py_4',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
+            'box_lid_py', 
+            transformUtils.transformFromPose(array([-0.08829975,  0.02615101, -0.08088898]), array([ 0.71597573, -0.13627428,  0.68060439, -0.07473772]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('clear_lid_py_1',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
+            'box_wall_ny', 
+            transformUtils.transformFromPose(array([-0.1230507 ,  0.37731466,  0.22021508]), array([ 0.71870162, -0.30503559,  0.62298606, -0.04805876]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('clear_lid_py_2',
+            'link_6', 
+            transformUtils.transformFromPose(array([ 0.28045297, -0.0873983 ,  0.00155146]), array([ 0.99776053, -0.06238316,  0.02251967,  0.00866776])),
+            'box_wall_ny', 
+            transformUtils.transformFromPose(array([-0.0483845 ,  0.10244286,  0.30024824]), array([ 0.71592305, -0.18180936,  0.66873879,  0.08478196]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('reach_lid_ny',
+            'link_6',  # switch to index finger
+            transformUtils.transformFromPose(array([ 0.2762586 ,  0.08744795, -0.03422115]), array([ -1.95770323e-02,   9.99808349e-01,  -3.51273567e-05, 5.62755701e-05])),
+            'box_wall_ny', 
+            transformUtils.transformFromPose(array([-0.05182284,  0.20024828,  0.22180205]), array([ 0.33157685,  0.71718487, -0.0865867 , -0.60679931]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('under_lid_ny',
+            'link_6',  # switch to index finger
+            transformUtils.transformFromPose(array([ 0.2762586 ,  0.08744795, -0.03422115]), array([ -1.95770323e-02,   9.99808349e-01,  -3.51273567e-05, 5.62755701e-05])),
+            'box_lid_ny', 
+            transformUtils.transformFromPose(array([-0.06929865, -0.13893348,  0.02239436]), array([ 0.77932306, -0.12096817, -0.61323995, -0.04426089]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('push_open_lid_ny_1',
+            'link_6',  # switch to index finger
+            transformUtils.transformFromPose(array([ 0.2762586 ,  0.08744795, -0.03422115]), array([ -1.95770323e-02,   9.99808349e-01,  -3.51273567e-05, 5.62755701e-05])),
+            'box_lid_ny', 
+            transformUtils.transformFromPose(array([-0.0647914 , -0.09641637,  0.00619952]), array([ 0.71487847, -0.37097652, -0.5810347 ,  0.11714893]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('push_open_lid_ny_2',
+            'link_6',  # switch to index finger
+            transformUtils.transformFromPose(array([ 0.2762586 ,  0.08744795, -0.03422115]), array([ -1.95770323e-02,   9.99808349e-01,  -3.51273567e-05, 5.62755701e-05])),
+            'box_lid_ny', 
+            transformUtils.transformFromPose(array([-0.06922679, -0.06627821, -0.06163632]), array([ 0.75207569, -0.30828042, -0.53922565,  0.22041107]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('push_open_lid_ny_3',
+            'link_6',  # switch to index finger
+            transformUtils.transformFromPose(array([ 0.2762586 ,  0.08744795, -0.03422115]), array([ -1.95770323e-02,   9.99808349e-01,  -3.51273567e-05, 5.62755701e-05])),
+            'box_lid_ny', 
+            transformUtils.transformFromPose(array([-0.06831325, -0.04608639, -0.07934433]), array([ 0.60479311, -0.49542224, -0.37648556,  0.49703192]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('push_open_lid_ny_4',
+            'link_6',  # switch to index finger
+            transformUtils.transformFromPose(array([ 0.2762586 ,  0.08744795, -0.03422115]), array([ -1.95770323e-02,   9.99808349e-01,  -3.51273567e-05, 5.62755701e-05])),
+            'box_lid_ny', 
+            transformUtils.transformFromPose(array([-0.04805165, -0.03240205, -0.0680926 ]), array([ 0.1980355 , -0.65634955, -0.00909902,  0.72794534]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('grasp_prep_1',
+            'link_6',  # switch to index finger
+            transformUtils.transformFromPose(array([ 0.2762586 ,  0.08744795, -0.03422115]), array([ -1.95770323e-02,   9.99808349e-01,  -3.51273567e-05, 5.62755701e-05])),
+            'box_wall_ny', 
+            transformUtils.transformFromPose(array([-0.07064733,  0.12626073,  0.30145889]), array([ 0.02972969,  0.72072932,  0.03412298, -0.69173768]))
+            ) )
+
+        self.plannedManipFrames.append( 
+            ('grasp_prep_2',
+            'link_6',  # switch to index finger
+            transformUtils.transformFromPose(array([ 0.26640564,  0.00887525, -0.00600118]), array([ -1.62187647e-03,   9.99998681e-01,  -3.24007632e-05, 8.57870447e-05])),
+            'box_wall_ny', 
+            transformUtils.transformFromPose(array([-0.07072407,  0.11885632,  0.27238985]), array([ 0.02749294,  0.722208  ,  0.0323756 , -0.6903706 ]))
             ) )
 
         self.taskTree.removeAllTasks()
@@ -462,9 +574,9 @@ class BoxOpenPanel(TaskUserPanel):
             addManipulation(task)
 
         # TODO: bind these to buttons
-        if self.planner.ikPlanner.fixedBaseArm:
-            addReach('Extra')
-            addGrab('Extra')
+        #if self.planner.ikPlanner.fixedBaseArm:
+            #addReach('Extra')
+            #addGrab('Extra')
             
      #    ############
      #    # some helpers
