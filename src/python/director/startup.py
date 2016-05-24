@@ -511,14 +511,15 @@ if usePlanning:
 
     manipulandStateModels = []
     manipulandJointControllers = []
-    for entry in directorConfig['fittingConfig']:
-        mstatemodel, mjointcontroller = roboturdf.loadRobotModel(entry, view, urdfFile=directorConfig['fittingConfig'][entry]['urdf'], visible=True, parent="estimation", jointNames = directorConfig['fittingConfig'][entry]['drakeJointNames'])
-        mjointcontroller.setPose(directorConfig['fittingConfig'][entry]['update_channel'], mjointcontroller.getPose('q_zero'))
-        mjointcontroller.addLCMUpdater(directorConfig['fittingConfig'][entry]['update_channel'])
-        manipulandStateModels.append(mstatemodel)
-        manipulandJointControllers.append(mjointcontroller)
-    continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
-    boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem, manipulandStateModels)
+    if 'fittingConfig' in directorConfig.keys():
+        for entry in directorConfig['fittingConfig']:
+            mstatemodel, mjointcontroller = roboturdf.loadRobotModel(entry, view, urdfFile=directorConfig['fittingConfig'][entry]['urdf'], visible=True, parent="estimation", jointNames = directorConfig['fittingConfig'][entry]['drakeJointNames'])
+            mjointcontroller.setPose(directorConfig['fittingConfig'][entry]['update_channel'], mjointcontroller.getPose('q_zero'))
+            mjointcontroller.addLCMUpdater(directorConfig['fittingConfig'][entry]['update_channel'])
+            manipulandStateModels.append(mstatemodel)
+            manipulandJointControllers.append(mjointcontroller)
+        continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
+        boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem, manipulandStateModels)
 
     taskPanels = OrderedDict()
 
@@ -533,8 +534,9 @@ if usePlanning:
     taskPanels['Terrain'] = terrainTaskPanel.widget
     taskPanels['Table'] = tableTaskPanel.widget
     taskPanels['Continuous Walking'] = continuousWalkingTaskPanel.widget
-    taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
-    taskPanels['Box Open'] = boxOpenPanel.widget
+    if 'fittingConfig' in directorConfig.keys():
+        taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
+        taskPanels['Box Open'] = boxOpenPanel.widget
     if useMappingPanel:
         taskPanels['Mapping'] = mappingTaskPanel.widget
 
