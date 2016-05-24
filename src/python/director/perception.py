@@ -352,7 +352,7 @@ class MultiSenseSource(TimerCallback):
         m.utime = getUtime()
         m.num_joints = 1
         m.joint_name = [ "neck_ay" ]
-        m.joint_position = math.radians(neckPitchDegrees)
+        m.joint_position = [math.radians(neckPitchDegrees)]
         lcmUtils.publish('DESIRED_NECK_ANGLES', m)
 
 

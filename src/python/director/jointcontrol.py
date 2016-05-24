@@ -96,7 +96,7 @@ class JointController(object):
             quat = [quat.w, quat.x, quat.y, quat.z]
             pose[3:6] = transformUtils.quaternionToRollPitchYaw(quat)
             for name, position in zip(msg.joint_name, msg.joint_position):
-                if self.jointMap[name] >= 0:
+                if name in self.jointMap.keys() and self.jointMap[name] >= 0:
                     pose[self.jointMap[name]] = position
 
             self.lastRobotStateMessage = msg
