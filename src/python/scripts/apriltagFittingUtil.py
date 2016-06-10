@@ -322,7 +322,9 @@ class ApriltagFittingPanel(object):
         gl = QtGui.QGridLayout(self.widget)
         gl.addWidget(self.app.showObjectModel(), 0, 0, 4, 1) # row, col, rowspan, colspan
         gl.addWidget(self.view, 0, 1, 4, 3)
-        gl.addWidget(self.jointTeleopPanel.widget, 0, 4, 3, 1)
+        sa = QtGui.QScrollArea()
+        sa.setWidget(self.jointTeleopPanel.widget)
+        gl.addWidget(sa, 0, 4, 3, 1)
         gl.addWidget(self.apriltagPanel.widget, 3, 4, 1, 1)
         #gl.setRowStretch(0,1)
         gl.setColumnStretch(1,5)
