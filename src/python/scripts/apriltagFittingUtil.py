@@ -19,6 +19,8 @@ from PythonQt import QtCore, QtGui, QtUiTools
 from director import vtkAll as vtk
 from director.debugVis import DebugData
 from director import segmentation
+from director import cameraview
+from bot_core import robot_state_t
 import drc as lcmdrc
 import bot_core
 import numpy as np
@@ -29,6 +31,12 @@ import functools
 from director.utime import getUtime
 
 import scipy.interpolate
+
+def getBotFrame(frameName):
+    t = vtk.vtkTransform()
+    t.PostMultiply()
+    cameraview.imageManager.queue.getTransform(frameName, 'local', t)
+    return t
 
 def addWidgetsToDict(widgets, d):
 
@@ -167,7 +175,7 @@ class ApriltagPanel(object):
         linkFrame = transformUtils.copyFrame( self.stateModels[self.robotCombo.currentIndex].getLinkFrame(self.linkCombo.currentText ))
         apriltagFrame = transformUtils.copyFrame(self.apriltag.getChildFrame().transform)
 
-        apriltagFrame.PreMultiply()
+        apriltagFrame.PostMultiply()
         apriltagFrame.Concatenate( linkFrame.GetLinearInverse() )
 
         xyz = transformUtils.getNumpyFromTransform(apriltagFrame)[0:3, 3]
@@ -184,7 +192,12 @@ class JointTeleopPanel(object):
         self.stateModels = stateModels
         self.jointControllers = jointControllers
 
+        # hacks to get this experiment up and running...
+        self.estRobotStateRobotName = "arm"
+        self.estRobotStateJointNames = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
         self.buildTabWidget(stateModels, jointControllers)
+
+        lcmUtils.addSubscriber('EST_ROBOT_STATE', robot_state_t, self.handleEstRobotState)
 
     def buildTabWidget(self, stateModels, jointControllers):
 
@@ -209,9 +222,10 @@ class JointTeleopPanel(object):
             for jointName in joints:
                 label = QtGui.QLabel(jointName)
                 spinbox = QtGui.QDoubleSpinBox()
-                spinbox.setMinimum(-1000.)
-                spinbox.setMaximum(1000.)
-                spinbox.setSingleStep(0.01)
+                spinbox.setMinimum(-10.)
+                spinbox.setMaximum(10.)
+                spinbox.setSingleStep(0.005)
+                spinbox.setDecimals(5)
                 row = gridLayout.rowCount()
                 gridLayout.addWidget(label, row, 0)
                 gridLayout.addWidget(spinbox, row, 1)
@@ -268,6 +282,14 @@ class JointTeleopPanel(object):
             spinbox.setValue(jointValue)
             spinbox.blockSignals(False)
 
+    def handleEstRobotState(self, msg):
+        for jointname in self.estRobotStateJointNames:
+            for i in range(msg.num_joints):
+                if msg.joint_name[i] == jointname:
+                    self.poseMap[self.estRobotStateRobotName][self.toJointIndex(self.estRobotStateRobotName, jointname)] = msg.joint_position[i]
+                    break
+        self.showPose(self.estRobotStateRobotName)
+        self.updateSpinboxes()
 
 class ApriltagFittingPanel(object):
 
@@ -278,6 +300,8 @@ class ApriltagFittingPanel(object):
         view = self.app.createView()
         self.view = view
 
+        #cameraview.init()
+
         self.config = drcargs.getDirectorConfig()
         
         # load all relevant state models from config
@@ -287,7 +311,7 @@ class ApriltagFittingPanel(object):
             for entry in self.config['fittingConfig']:
                 mstatemodel, mjointcontroller = roboturdf.loadRobotModel(entry, self.view, urdfFile='../../'+self.config['fittingConfig'][entry]['urdf'], visible=True, parent="estimation", jointNames = self.config['fittingConfig'][entry]['drakeJointNames'])
                 mjointcontroller.setPose(self.config['fittingConfig'][entry]['update_channel'], mjointcontroller.getPose('q_zero'))
-                mjointcontroller.addLCMUpdater(self.config['fittingConfig'][entry]['update_channel'])
+                #mjointcontroller.addLCMUpdater(self.config['fittingConfig'][entry]['update_channel'])
                 stateModels.append(mstatemodel)
                 jointControllers.append(mjointcontroller)
 
@@ -306,12 +330,39 @@ class ApriltagFittingPanel(object):
         # kinect management
         kinectlcm.init(self.view)
 
+        #tr = getBotFrame('robot_yplus_tag')
+        #tagTranslation = list(transformUtils.poseFromTransform(tr)[0])
+        #tagRpy = [k*(180/math.pi) for k in list(transformUtils.rollPitchYawFromTransform(tr))] #[-90,0,90]
+        tagToWorld = transformUtils.frameFromPositionAndRPY([0, 0, 0], [-90, 0, 90])#tagTranslation, tagRpy)
+
+        cameraToTag = transformUtils.transformFromPose([0.08, -0.04, 1.38], [0.89, 0.2, -0.375, -0.1]).GetLinearInverse()
+        cameraToWorld = transformUtils.concatenateTransforms([cameraToTag, tagToWorld])
+
+         #   for objname in kinect_frames_to_handle:
+        obj = om.findObjectByName('kinect source frame')
+        if obj:
+            #filterUtils.transformPolyData(obj, cameraToWorld)
+            obj.copyFrame(cameraToWorld)
+
+        '''
+        tr = getBotFrame('robot_base')
+        base_pos = transformUtils.poseFromTransform(tr)[0]
+        base_rpy = transformUtils.rollPitchYawFromTransform(tr)
+
+        robotStateJointController.q[0] = base_pos[0]
+        robotStateJointController.q[1] = base_pos[1]
+        robotStateJointController.q[2] = base_pos[2]
+        robotStateJointController.q[3] = base_rpy[0]
+        robotStateJointController.q[4] = base_rpy[1]
+        robotStateJointController.q[5] = base_rpy[2]
+        robotStateJointController.push()
+        '''
+
     def resetJointTeleopSliders(self):
         self.jointTeleopPanel.resetPoseToRobotState()
-  
+
 
 def main():
-
     p = ApriltagFittingPanel()
     p.widget.show()
     p.widget.resize(1400, 1400*9/16.0)
@@ -321,4 +372,56 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
+
+def frameHandler(msg):
+    global kinect_transform_latest
+
+    #Take a windowed average of latest k samples, if available
+    kinect_transform_latest.append((msg.trans, msg.quat))
+    if len(kinect_transform_latest) > KINECT_TRANSFORM_WINDOW_LENGTH:
+        kinect_transform_latest = kinect_transform_latest[-KINECT_TRANSFORM_WINDOW_LENGTH:]
+
+    avg_trans = tuple([sum([kinect_transform_latest[sample][0][ind] \
+                        for sample in range(len(kinect_transform_latest))]) / len(kinect_transform_latest) \
+                        for ind in range(len(kinect_transform_latest[0][0]))])
+    avg_quat = tuple([sum([kinect_transform_latest[sample][1][ind] \
+                        for sample in range(len(kinect_transform_latest))]) / len(kinect_transform_latest) \
+                        for ind in range(len(kinect_transform_latest[0][1]))])
+
+    botToCamera = transformUtils.transformFromPose(avg_trans, avg_quat)
+    cameraToBot = botToCamera.GetLinearInverse()
+    botToWorld = transformUtils.frameFromPositionAndRPY(botTranslation, botRpy)
+
+    cameraToWorld = transformUtils.concatenateTransforms([cameraToBot, botToWorld])
+
+#    for objname in to_be_framed:
+#        obj = om.findObjectByName(objname)
+#        if obj:
+#            framename = objname + ' frame'
+#            fr = om.findObjectByName(framename)
+#            if fr is None:
+#                vis.addChildFrame(obj)
+
+ #   for objname in kinect_frames_to_handle:
+    obj = om.findObjectByName('kinect source frame')
+    if obj:
+        #filterUtils.transformPolyData(obj, cameraToWorld)
+        obj.copyFrame(cameraToWorld)
+
+
+tr = getBotFrame('robot_base')
+base_pos = transformUtils.poseFromTransform(tr)[0]
+base_rpy = transformUtils.rollPitchYawFromTransform(tr)
+
+robotStateJointController.q[0] = base_pos[0]
+robotStateJointController.q[1] = base_pos[1]
+robotStateJointController.q[2] = base_pos[2]
+robotStateJointController.q[3] = base_rpy[0]
+robotStateJointController.q[4] = base_rpy[1]
+robotStateJointController.q[5] = base_rpy[2]
+robotStateJointController.push()
+
 
