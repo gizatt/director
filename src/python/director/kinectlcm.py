@@ -176,4 +176,4 @@ def startButton():
     init(view)
     _kinectSource.start()
 
-app.addToolbarMacro('start live kinect', startButton)
+#app.addToolbarMacro('start live kinect', startButton)
