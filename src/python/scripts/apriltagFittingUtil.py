@@ -68,8 +68,6 @@ class ApriltagItem(PolyDataItem):
         t.Translate(filterUtils.computeCentroid(d.getPolyData()))
         segmentation.makeMovable(self, t)
 
-
-
     def getPose(self):
         childFrame = self.getChildFrame()
         t = childFrame.transform if childFrame else vtk.vtkTransform()
@@ -112,31 +110,70 @@ class ApriltagItem(PolyDataItem):
 
 class ApriltagPanel(object):
 
-    def __init__(self):
+    def __init__(self, name, stateModels):
 
-        self.widget = QtGui.QTabWidget()
-        
-        self.tags = []
+        self.widget = QtGui.QWidget()
+        self.name = name
+        self.stateModels = stateModels
 
         self.buildWidget()
 
+        self.timerCallback = TimerCallback(30)
+        self.timerCallback.callback = self.update
+        self.timerCallback.start()
+
     def buildWidget(self):
         self.container = om.addContainer("Apriltags")
-        for i in range(3):
-            apriltagWidget = QtGui.QWidget()
-            gridLayout = QtGui.QGridLayout(apriltagWidget)
-            #gridLayout.setColumnStretch(0, 1)
-            
-            label = QtGui.QLabel("TABTODO")
-            numericLabel = QtGui.QLabel(str(i))
-            column = gridLayout.columnCount()
-            gridLayout.addWidget(label, 0, column)
-            gridLayout.addWidget(numericLabel, 2, column)
-            #gridLayout.setColumnStretch(gridLayout.columnCount(), 1)
-            self.widget.addTab(apriltagWidget, str(i))
 
-            self.tags.append(ApriltagItem(str(i), view, 0.08, container=self.container))
+        gridLayout = QtGui.QGridLayout(self.widget)
+        #gridLayout.setColumnStretch(0, 1)
+        
+        robotlabel = QtGui.QLabel("Attached robot:")
+        linklabel = QtGui.QLabel("Attached link:") 
 
+        self.robotCombo = QtGui.QComboBox()
+        self.linkCombo = QtGui.QComboBox()
+        for stateModel in self.stateModels:
+            robotName = stateModel.getProperty('Name')
+            self.robotCombo.addItem(robotName)
+        self.robotCombo.setCurrentIndex(0)
+        self.populateLinkComboBox()
+        self.robotCombo.connect('currentIndexChanged(int)', functools.partial(self.populateLinkComboBox))
+
+        xyzlabel = QtGui.QLabel("XYZ: ")
+        self.xyzLabel = QtGui.QLabel("")
+
+        rpylabel = QtGui.QLabel("RPY: ")
+        self.rpyLabel = QtGui.QLabel("")
+
+        gridLayout.addWidget(robotlabel, 0, 0)
+        gridLayout.addWidget(self.robotCombo, 0, 1)
+        gridLayout.addWidget(linklabel, 1, 0)
+        gridLayout.addWidget(self.linkCombo, 1, 1)
+        gridLayout.addWidget(xyzlabel, 2, 0)
+        gridLayout.addWidget(self.xyzLabel, 2, 1)
+        gridLayout.addWidget(rpylabel, 3, 0)
+        gridLayout.addWidget(self.rpyLabel, 3, 1)
+
+        self.apriltag = ApriltagItem(self.name, view, 0.08, container=self.container)
+
+    def populateLinkComboBox(self, extra=None):
+        stateModel = self.stateModels[self.robotCombo.currentIndex]
+        self.linkCombo.clear()
+        for linkname in stateModel.model.getLinkNames():
+            self.linkCombo.addItem(linkname)
+
+    def update(self):
+        linkFrame = transformUtils.copyFrame( self.stateModels[self.robotCombo.currentIndex].getLinkFrame(self.linkCombo.currentText ))
+        apriltagFrame = transformUtils.copyFrame(self.apriltag.getChildFrame().transform)
+
+        apriltagFrame.PreMultiply()
+        apriltagFrame.Concatenate( linkFrame.GetLinearInverse() )
+
+        xyz = transformUtils.getNumpyFromTransform(apriltagFrame)[0:3, 3]
+        rpy = transformUtils.rollPitchYawFromTransform(apriltagFrame)
+        self.xyzLabel.setText("%06.3f, %06.3f, %06.3f" % (xyz[0], xyz[1], xyz[2]))
+        self.rpyLabel.setText("%06.3f, %06.3f, %06.3f" % (rpy[0]*180./math.pi, rpy[1]*180./math.pi, rpy[2]*180./math.pi))
 
 class JointTeleopPanel(object):
 
@@ -255,7 +292,7 @@ class ApriltagFittingPanel(object):
                 jointControllers.append(mjointcontroller)
 
         self.jointTeleopPanel = JointTeleopPanel(stateModels, jointControllers)
-        self.apriltagPanel = ApriltagPanel()
+        self.apriltagPanel = ApriltagPanel("123", stateModels)
         self.widget = QtGui.QWidget()
 
         gl = QtGui.QGridLayout(self.widget)
