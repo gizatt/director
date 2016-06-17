@@ -337,8 +337,7 @@ class ApriltagFittingPanel(object):
         #tagRpy = [k*(180/math.pi) for k in list(transformUtils.rollPitchYawFromTransform(tr))] #[-90,0,90]
         tagToWorld = transformUtils.frameFromPositionAndRPY([0, 0, 0], [-90, 0, 90])#tagTranslation, tagRpy)
 
-        cameraToTag = transformUtils.transformFromPose([0.08, -0.04, 1.38], [0.89, 0.2, -0.375, -0.1]).GetLinearInverse()
-        cameraToWorld = transformUtils.concatenateTransforms([cameraToTag, tagToWorld])
+        cameraToWorld =  transformUtils.transformFromPose([0.33, 0.035, 1.24], [0.56, 0.68,  0.36, -0.273]).GetLinearInverse()
 
          #   for objname in kinect_frames_to_handle:
         obj = om.findObjectByName('kinect source frame')
