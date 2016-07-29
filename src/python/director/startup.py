@@ -1174,11 +1174,12 @@ def frameHandler(msg):
                         for sample in range(len(kinect_transform_latest))]) / len(kinect_transform_latest) \
                         for ind in range(len(kinect_transform_latest[0][1]))])
 
-    botToCamera = transformUtils.transformFromPose(avg_trans, avg_quat)
-    cameraToBot = botToCamera.GetLinearInverse()
-    botToWorld = transformUtils.frameFromPositionAndRPY(botTranslation, botRpy)
+    #botToCamera = transformUtils.transformFromPose(avg_trans, avg_quat)
+    #cameraToBot = botToCamera.GetLinearInverse()
+    #botToWorld = transformUtils.frameFromPositionAndRPY(botTranslation, botRpy)
 
-    cameraToWorld = transformUtils.concatenateTransforms([cameraToBot, botToWorld])
+    #cameraToWorld = transformUtils.concatenateTransforms([cameraToBot, botToWorld])
+    cameraToWorld = transformUtils.transformFromPose(avg_trans, avg_quat)
 
 #    for objname in to_be_framed:
 #        obj = om.findObjectByName(objname)
