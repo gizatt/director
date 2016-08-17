@@ -26,8 +26,6 @@ from director import bihandeddemo
 from director import debrisdemo
 from director import doordemo
 from director import drilldemo
-from director import tabledemo
-from director import mappingdemo
 from director import valvedemo
 from director import drivingplanner
 from director import egressplanner
@@ -66,11 +64,11 @@ from director import atlasdriver
 from director import atlasdriverpanel
 from director import multisensepanel
 from director import navigationpanel
-from director import mappingpanel
 from director import handcontrolpanel
 from director import sensordatarequestpanel
 from director import tasklaunchpanel
 from director.jointpropagator import JointPropagator
+from director import planningutils
 
 from director import coursemodel
 
@@ -167,18 +165,24 @@ useBlackoutText = True
 useRandomWalk = True
 useCOPMonitor = True
 useCourseModel = False
-useMappingPanel = True
-notUseOpenniDepthImage = True
+useLimitJointsSentToPlanner = False
+useOpenniDepthImage = False
 
 poseCollection = PythonQt.dd.ddSignalMap()
 costCollection = PythonQt.dd.ddSignalMap()
 
 if 'fixedBaseArm' in drcargs.getDirectorConfig()['userConfig']:
     ikPlanner.fixedBaseArm = True
+
 if 'disableComponents' in drcargs.getDirectorConfig():
     for component in drcargs.getDirectorConfig()['disableComponents']:
         print "Disabling", component
         locals()[component] = False
+
+if 'enableComponents' in drcargs.getDirectorConfig():
+    for component in drcargs.getDirectorConfig()['enableComponents']:
+        print "Enabling", component
+        locals()[component] = True
 
 
 if useSpreadsheet:
@@ -225,8 +229,7 @@ if usePerception:
         return trackers.PointerTracker(robotStateModel, disparityPointCloud)
 
 
-# TODO: change this logic, currently can only disable components rather than re-enable them
-if (not notUseOpenniDepthImage):
+if useOpenniDepthImage:
     openniDepthPointCloud = segmentation.DisparityPointCloudItem('openni point cloud', 'OPENNI_FRAME', 'OPENNI_FRAME_LEFT', cameraview.imageManager)
     openniDepthPointCloud.addToView(view)
     om.addToObjectModel(openniDepthPointCloud, parentObj=om.findObjectByName('sensors'))
@@ -345,6 +348,15 @@ if usePlanning:
     def planNominal():
         ikPlanner.computeNominalPlan(robotStateJointController.q)
 
+    def planHomeStand():
+        ''' Move the robot back to a safe posture, 1m above its feet, w/o moving the hands '''
+        ikPlanner.computeHomeStandPlan(robotStateJointController.q, footstepsDriver.getFeetMidPoint(robotStateModel), 1.0167)
+
+    def planHomeNominal():
+        ''' Move the robot back to a safe posture, 1m above its feet, w/o moving the hands '''
+        ikPlanner.computeHomeNominalPlan(robotStateJointController.q, footstepsDriver.getFeetMidPoint(robotStateModel), 1.0167)
+
+
     def fitDrillMultisense():
         pd = om.findObjectByName('Multisense').model.revPolyData
         om.removeFromObjectModel(om.findObjectByName('debug'))
@@ -421,6 +433,9 @@ if usePlanning:
     #app.addToolbarMacro('stereo height', sendFusedHeightRequest)
     #app.addToolbarMacro('stereo depth', sendFusedDepthRequest)
 
+    planningUtils = planningutils.PlanningUtils(robotStateModel, robotStateJointController)
+    if useLimitJointsSentToPlanner:
+        planningUtils.clampToJointLimits = True
 
     jointLimitChecker = teleoppanel.JointLimitChecker(robotStateModel, robotStateJointController)
     jointLimitChecker.setupMenuAction()
@@ -429,7 +444,7 @@ if usePlanning:
     spindleSpinChecker =  multisensepanel.SpindleSpinChecker(spindleMonitor)
     spindleSpinChecker.setupMenuAction()
 
-    postureShortcuts = teleoppanel.PosturePlanShortcuts(robotStateJointController, ikPlanner)
+    postureShortcuts = teleoppanel.PosturePlanShortcuts(robotStateJointController, ikPlanner, planningUtils)
 
 
     def drillTrackerOn():
@@ -451,9 +466,9 @@ if usePlanning:
     manipPlanner.connectPlanReceived(playbackPanel.setPlan)
 
     teleopPanel = teleoppanel.init(robotStateModel, robotStateJointController, teleopRobotModel, teleopJointController,
-                     ikPlanner, manipPlanner, affordanceManager, playbackPanel.setPlan, playbackPanel.hidePlan)
+                     ikPlanner, manipPlanner, affordanceManager, playbackPanel.setPlan, playbackPanel.hidePlan, planningUtils)
 
-    motionPlanningPanel = motionplanningpanel.init(robotStateModel, robotStateJointController, teleopRobotModel, teleopJointController, 
+    motionPlanningPanel = motionplanningpanel.init(planningUtils, robotStateModel, robotStateJointController, teleopRobotModel, teleopJointController,
                             ikPlanner, manipPlanner, affordanceManager, playbackPanel.setPlan, playbackPanel.hidePlan, footstepsDriver)
     
     if useGamepad:
@@ -467,11 +482,6 @@ if usePlanning:
                     ikPlanner, manipPlanner, atlasdriver.driver, lHandDriver,
                     perception.multisenseDriver, refitBlocks)
 
-    tableDemo = tabledemo.TableDemo(robotStateModel, playbackRobotModel,
-                    ikPlanner, manipPlanner, footstepsDriver, atlasdriver.driver, lHandDriver, rHandDriver,
-                    perception.multisenseDriver, view, robotStateJointController, playPlans, teleopPanel, playbackPanel, jointLimitChecker)
-    tableTaskPanel = tabledemo.TableTaskPanel(tableDemo)
-
     drillDemo = drilldemo.DrillPlannerDemo(robotStateModel, playbackRobotModel, teleopRobotModel, footstepsDriver, manipPlanner, ikPlanner,
                     lHandDriver, rHandDriver, atlasdriver.driver, perception.multisenseDriver,
                     fitDrillMultisense, robotStateJointController,
@@ -483,7 +493,7 @@ if usePlanning:
     valveTaskPanel = valvedemo.ValveTaskPanel(valveDemo)
 
     continuouswalkingDemo = continuouswalkingdemo.ContinousWalkingDemo(robotStateModel, footstepsPanel, footstepsDriver, playbackPanel, robotStateJointController, ikPlanner,
-                                                                       teleopJointController, navigationPanel, cameraview, jointLimitChecker)
+                                                                       teleopJointController, navigationPanel, cameraview)
     continuousWalkingTaskPanel = continuouswalkingdemo.ContinuousWalkingTaskPanel(continuouswalkingDemo)
 
     useDrivingPlanner = drivingplanner.DrivingPlanner.isCompatibleWithConfig()
@@ -499,13 +509,6 @@ if usePlanning:
                     lHandDriver, rHandDriver, atlasdriver.driver, perception.multisenseDriver,
                     fitDrillMultisense, robotStateJointController,
                     playPlans, showPose, cameraview, segmentationpanel)
-
-    mappingDemo = mappingdemo.MappingDemo(robotStateModel, playbackRobotModel,
-                    ikPlanner, manipPlanner, footstepsDriver, atlasdriver.driver, lHandDriver, rHandDriver,
-                    perception.multisenseDriver, view, robotStateJointController, playPlans)
-    if useMappingPanel:
-        mappingPanel = mappingpanel.init(robotStateJointController, footstepsDriver)
-        mappingTaskPanel = mappingpanel.MappingTaskPanel(mappingDemo, mappingPanel)
 
     doorDemo = doordemo.DoorDemo(robotStateModel, footstepsDriver, manipPlanner, ikPlanner,
                                       lHandDriver, rHandDriver, atlasdriver.driver, perception.multisenseDriver,
@@ -546,8 +549,8 @@ if usePlanning:
     taskPanels['Drill'] = drillTaskPanel.widget
     taskPanels['Surprise'] = surpriseTaskPanel.widget
     taskPanels['Terrain'] = terrainTaskPanel.widget
-    taskPanels['Table'] = tableTaskPanel.widget
     taskPanels['Continuous Walking'] = continuousWalkingTaskPanel.widget
+
     if 'fittingConfig' in directorConfig.keys():
         taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
         taskPanels['Box Open'] = boxOpenPanel.widget
@@ -1117,26 +1120,6 @@ if 'useKuka' in drcargs.getDirectorConfig()['userConfig']:
     imageOverlayManager.viewName = "KINECT_RGB"
     #ikPlanner.fixedBaseArm = True
     #showImageOverlay()
-
-def roomMap():
-    mappingPanel.onStartMappingButton()
-    t = mappingdemo.MappingDemo(robotStateModel, playbackRobotModel,
-                    ikPlanner, manipPlanner, footstepsDriver, atlasdriver.driver, lHandDriver, rHandDriver,
-                    perception.multisenseDriver, view, robotStateJointController, playPlans)
-    t.visOnly = False
-    t.optionalUserPromptEnabled = False
-    q = t.autonomousExecuteRoomMap()
-    q.connectTaskEnded(mappingSweepEnded)
-    q.start()
-
-def mappingSweepEnded(taskQ, task):
-    if task.func_name == 'doneIndicator':
-        import time as qq
-        mappingPanel.onStopMappingButton()
-        qq.sleep(3)
-        mappingPanel.onShowMapButton()
-        print "DONE WITH MAPPING ROOM"
-
 
 if 'startup' in drcargs.args():
     for filename in drcargs.args().startup:

@@ -84,7 +84,7 @@ class JointController(object):
             if self.ignoreOldStateMessages and self.lastRobotStateMessage is not None and msg.utime < self.lastRobotStateMessage.utime:
                 return
             poseName = channelName
-
+            
             # map from msg joint names to our drake joint names
             if self.jointMap is None:
                 self.regenerateJointMap(msg.joint_name)

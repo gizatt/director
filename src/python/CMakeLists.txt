@@ -66,8 +66,6 @@ set(python_files
   director/lcmcollections.py  
   director/lcmspy.py
   director/lcmUtils.py
-  director/mappingdemo.py
-  director/mappingpanel.py
   director/mapsregistrar.py
   director/matlab.py
   director/meshmanager.py
@@ -79,6 +77,7 @@ set(python_files
   director/openscope.py
   director/packagepath.py
   director/perception.py
+  director/planningutils.py
   director/planplayback.py
   director/playbackpanel.py
   director/pointcloudlcm.py
@@ -108,7 +107,6 @@ set(python_files
   director/statelistener.py
   director/surprisetask.py
   director/switchplanner.py
-  director/tabledemo.py
   director/tasklaunchpanel.py
   director/tdx.py
   director/teleoppanel.py
