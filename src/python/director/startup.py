@@ -554,8 +554,6 @@ if usePlanning:
     if 'fittingConfig' in directorConfig.keys():
         taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
         taskPanels['Box Open'] = boxOpenPanel.widget
-    if useMappingPanel:
-        taskPanels['Mapping'] = mappingTaskPanel.widget
 
     tasklaunchpanel.init(taskPanels)
 
