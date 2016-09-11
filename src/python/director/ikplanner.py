@@ -369,13 +369,14 @@ class IKPlanner(object):
 
         constraints = []
         linknames = []
-        if self.leftFootSupportEnabled:
-            linknames.append(self.leftFootLink)
-        if self.rightFootSupportEnabled:
-            linknames.append(self.rightFootLink)
-        for linkName in linknames:
-            p = self.createFixedLinkConstraints(startPoseName, linkName, **kwargs)
-            constraints.append(p)
+        if not self.fixedBaseArm:
+            if self.leftFootSupportEnabled:
+                linknames.append(self.leftFootLink)
+            if self.rightFootSupportEnabled:
+                linknames.append(self.rightFootLink)
+            for linkName in linknames:
+                p = self.createFixedLinkConstraints(startPoseName, linkName, **kwargs)
+                constraints.append(p)
         return constraints
 
     def createSixDofLinkConstraints(self, startPose, linkName, **kwargs):

@@ -535,8 +535,8 @@ if usePlanning:
             mjointcontroller.addLCMUpdater(directorConfig['fittingConfig'][entry]['update_channel'])
             manipulandStateModels.append(mstatemodel)
             manipulandJointControllers.append(mjointcontroller)
-        continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
-        boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem, manipulandStateModels)
+        #continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
+        #boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem, manipulandStateModels)
 
     taskPanels = OrderedDict()
 
@@ -551,9 +551,9 @@ if usePlanning:
     taskPanels['Terrain'] = terrainTaskPanel.widget
     taskPanels['Continuous Walking'] = continuousWalkingTaskPanel.widget
 
-    if 'fittingConfig' in directorConfig.keys():
-        taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
-        taskPanels['Box Open'] = boxOpenPanel.widget
+    #if 'fittingConfig' in directorConfig.keys():
+    #    taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
+    #    taskPanels['Box Open'] = boxOpenPanel.widget
 
     tasklaunchpanel.init(taskPanels)
 
