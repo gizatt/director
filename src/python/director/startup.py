@@ -110,6 +110,8 @@ from collections import OrderedDict
 import functools
 import math
 
+from vicon import body_t
+
 import numpy as np
 from director.debugVis import DebugData
 from director import ioUtils as io
@@ -535,8 +537,10 @@ if usePlanning:
             mjointcontroller.addLCMUpdater(directorConfig['fittingConfig'][entry]['update_channel'])
             manipulandStateModels.append(mstatemodel)
             manipulandJointControllers.append(mjointcontroller)
+
         #continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
         #boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem, manipulandStateModels)
+
 
     taskPanels = OrderedDict()
 
@@ -554,6 +558,8 @@ if usePlanning:
     #if 'fittingConfig' in directorConfig.keys():
     #    taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
     #    taskPanels['Box Open'] = boxOpenPanel.widget
+    #if useMappingPanel:
+    #    taskPanels['Mapping'] = mappingTaskPanel.widget
 
     tasklaunchpanel.init(taskPanels)
 
@@ -1135,9 +1141,22 @@ import bot_core
 # robotStateModel.setProperty('Visible', False)
 
 
-tr = getBotFrame('robot_yplus_tag')
-tagTranslation = list(transformUtils.poseFromTransform(tr)[0])
-tagRpy = [k*(180/math.pi) for k in list(transformUtils.rollPitchYawFromTransform(tr))] #[-90,0,90]
+if 'startup' in drcargs.args():
+    for filename in drcargs.args().startup:
+        execfile(filename)
+
+
+#New stuff
+import kinectlcm
+kinectlcm.init(view)
+
+import bot_core
+# robotStateModel.setProperty('Visible', False)
+
+
+tr = getBotFrame('robot_base')
+botTranslation = list(transformUtils.poseFromTransform(tr)[0])
+botRpy = [k*(180/math.pi) for k in list(transformUtils.rollPitchYawFromTransform(tr))] #[-90,0,90]
 
 
 #to_be_framed = ['table points', 'table plane points']
@@ -1161,11 +1180,12 @@ def frameHandler(msg):
                         for sample in range(len(kinect_transform_latest))]) / len(kinect_transform_latest) \
                         for ind in range(len(kinect_transform_latest[0][1]))])
 
-    tagToCamera = transformUtils.transformFromPose(avg_trans, avg_quat)
-    cameraToTag = tagToCamera.GetLinearInverse()
-    tagToWorld = transformUtils.frameFromPositionAndRPY(tagTranslation, tagRpy)
+    #botToCamera = transformUtils.transformFromPose(avg_trans, avg_quat)
+    #cameraToBot = botToCamera.GetLinearInverse()
+    #botToWorld = transformUtils.frameFromPositionAndRPY(botTranslation, botRpy)
 
-    cameraToWorld = transformUtils.concatenateTransforms([cameraToTag, tagToWorld])
+    #cameraToWorld = transformUtils.concatenateTransforms([cameraToBot, botToWorld])
+    cameraToWorld = transformUtils.transformFromPose(avg_trans, avg_quat)
 
 #    for objname in to_be_framed:
 #        obj = om.findObjectByName(objname)
@@ -1194,7 +1214,7 @@ robotStateJointController.q[4] = base_rpy[1]
 robotStateJointController.q[5] = base_rpy[2]
 robotStateJointController.push()
 
-lcmUtils.addSubscriber('APRIL_TAG_TO_CAMERA_LEFT', bot_core.rigid_transform_t, frameHandler)
+lcmUtils.addSubscriber('GT_CAMERA_OFFSET', body_t, frameHandler)
 
 
 

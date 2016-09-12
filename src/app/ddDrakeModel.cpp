@@ -621,8 +621,6 @@ public:
 
       const RigidBody * body = model->bodies[bodyIndex].get();
 
-      //printf("body: %s\n", body->get_name().c_str());
-
       for (size_t visualIndex = 0 ; visualIndex < body->get_visual_elements().size(); ++visualIndex)
       {
         //printf("vi %d\n", visualIndex);
@@ -689,6 +687,7 @@ public:
           meshVisual->VisualToLink = makeTransform(visual.getLocalTransform());
 
           meshVisual->Name = body->get_name();
+
           meshMap[body].push_back(meshVisual);
 
           meshVisual->Color = QColor(visual.getMaterial()[0]*255, visual.getMaterial()[1]*255, visual.getMaterial()[2]*255);
@@ -723,8 +722,6 @@ public:
       }
 
       vtkSmartPointer<vtkTransform> linkToWorld = makeTransform(relativeTransform(*cache, 0, body->get_body_index()));
-
-      //printf("%s to world: %f %f %f\n", body->get_name().c_str(), translation(0), translation(1), translation(2));
 
       for (size_t visualIndex = 0; visualIndex < itr->second.size(); ++visualIndex)
       {
