@@ -538,7 +538,7 @@ if usePlanning:
             manipulandStateModels.append(mstatemodel)
             manipulandJointControllers.append(mjointcontroller)
 
-        #continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
+        continuousManipulationPanel = continuousmanippanel.ContinuousManipPanel(robotSystem, manipulandStateModels)
         #boxOpenPanel = boxopenpanel.BoxOpenPanel(robotSystem, manipulandStateModels)
 
 
@@ -555,8 +555,8 @@ if usePlanning:
     taskPanels['Terrain'] = terrainTaskPanel.widget
     taskPanels['Continuous Walking'] = continuousWalkingTaskPanel.widget
 
-    #if 'fittingConfig' in directorConfig.keys():
-    #    taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
+    if 'fittingConfig' in directorConfig.keys():
+        taskPanels['Continuous Manip'] = continuousManipulationPanel.widget
     #    taskPanels['Box Open'] = boxOpenPanel.widget
     #if useMappingPanel:
     #    taskPanels['Mapping'] = mappingTaskPanel.widget
@@ -1162,7 +1162,7 @@ botRpy = [k*(180/math.pi) for k in list(transformUtils.rollPitchYawFromTransform
 #to_be_framed = ['table points', 'table plane points']
 #kinect_frames_to_handle = ['kinect source frame', 'table points frame', 'table plane points frame']
 
-KINECT_TRANSFORM_WINDOW_LENGTH = 15
+KINECT_TRANSFORM_WINDOW_LENGTH = 1
 kinect_transform_latest = []
 
 def frameHandler(msg):
