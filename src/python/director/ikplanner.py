@@ -1182,6 +1182,23 @@ class IKPlanner(object):
 
         return self.newReachGoal(startPoseName, side, targetFrame, constraints, graspToHandLinkFrame)
 
+    def planLinkGoal(self, startPose, side, linkName, targetFrame, graspToLinkFrame, lockBase=False, lockBack=False, lockArm=True, constraints=None):
+
+        startPoseName = 'reach_start'
+        self.addPose(startPose, startPoseName)
+
+        if constraints is None:
+            constraints = self.createMovingReachConstraints(startPoseName, lockBase=lockBase, lockBack=lockBack, lockArm=lockArm, side=side)
+
+        # Link final pose constraints
+        p, q = self.createPositionOrientationConstraint(linkName, targetFrame, graspToLinkFrame, positionTolerance=0.0, angleToleranceInDegrees=0.0)
+        p.tspan = [1.0, 1.0]
+        q.tspan = [1.0, 1.0]
+        constraints.extend([p,q])
+
+        constraintSet = ConstraintSet(self, constraints, 'reach_end', startPoseName)
+        return constraintSet
+
 
     def newReachGoals(self, startPoseName, rightFrame, leftFrame, constraints, graspToHandLinkFrame=None, lockOrient=True):
 

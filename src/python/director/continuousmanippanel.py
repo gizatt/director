@@ -141,7 +141,8 @@ class ContinuousManipPlanner(object):
         #vis.updateFrame(endFrame, 'Target Frame', parent='estimation', visible=True, scale=0.2)
 
         # eeLinkToHandFrame replaces the handlink -> palm transform
-        self.constraintSet = self.ikPlanner.planEndEffectorGoal(startPose, side, endFrame, lockBase=False, lockBack=True, graspToHandLinkFrame=self.eeLinkToHandFrame)
+        self.constraintSet = self.ikPlanner.planLinkGoal(startPose, side, self.manipulatorLinkName, endFrame, self.eeLinkToHandFrame, lockBase=False, lockBack=True)
+
         self.constraintSet.runIk()
         plan = self.constraintSet.runIkTraj()
         self.addPlan(plan)
