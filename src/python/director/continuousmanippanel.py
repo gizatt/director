@@ -49,8 +49,8 @@ class ContinuousManipPlanner(object):
         self.eeLinkToHandFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.0], [0, 0, 0] )
         
     def resetReachAndGrab(self):
-        self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [-0.2, 0, 0], [0, 0, 0] )
-        self.targetLinkToGrabFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0], [0, 0, 0] )
+        self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [-0.05, 0, 0], [0, 0, 0] )
+        self.targetLinkToGrabFrame = transformUtils.frameFromPositionAndRPY( [0, 0, -0.295], [0, -90, 0] )
 
     def targetLinkToGrabFrameModified(self, grabFrameObj):
         self.targetLinkToGrabFrame = transformUtils.copyFrame(grabFrameObj.transform)
@@ -107,6 +107,7 @@ class ContinuousManipPlanner(object):
             self.manipulatorStateModel = manipulatorStateModel
         if self.manipulatorLinkName is not manipulatorLinkName:
             self.manipulatorLinkName = manipulatorLinkName
+        # self.manipulandStateModel.getLinkFrame('tiny_screwdriver_body') ### get link transform to for current model pose
 
     def addPlan(self, plan):
         self.plans.append(plan)
