@@ -36,9 +36,11 @@ class ContinuousManipPlanner(object):
 
         self.grabFrameObj = None
         self.reachFrameObj = None
+        self.retractFrameObj = None
         self.handFrameObj = None
         self.grabFrame = None
         self.reachFrame = None
+        self.retractFrame = None
         self.handFrame = None
 
         self.resetHand()
@@ -49,6 +51,7 @@ class ContinuousManipPlanner(object):
         self.eeLinkToHandFrame = transformUtils.frameFromPositionAndRPY( [0, 0, 0.0], [0, 0, 0] )
         
     def resetReachAndGrab(self):
+        self.grabToRetractFrame = transformUtils.frameFromPositionAndRPY( [-0.08, 0, 0], [0, 0, 0] )
         self.grabToReachFrame = transformUtils.frameFromPositionAndRPY( [-0.05, 0, 0], [0, 0, 0] )
         self.targetLinkToGrabFrame = transformUtils.frameFromPositionAndRPY( [0, 0, -0.295], [0, -90, 0] )
 
@@ -61,6 +64,11 @@ class ContinuousManipPlanner(object):
         self.grabToReachFrame = transformUtils.copyFrame(reachFrameObj.transform)
         self.grabToReachFrame.Concatenate(self.manipulandStateModel.getLinkFrame(self.manipulandLinkName).GetLinearInverse())
         self.grabToReachFrame.Concatenate(self.targetLinkToGrabFrame.GetLinearInverse())
+
+    def grabToRetractFrameModified(self, retractFrameObj):
+        self.grabToRetractframe = transformUtils.copyFrame(retractFrameObj.transform)
+        self.grabToRetractframe.Concatenate(self.manipulandStateModel.getLinkFrame(self.manipulandLinkName).GetLinearInverse())
+        self.grabToRetractframe.Concatenate(self.targetLinkToGrabFrame.GetLinearInverse())
 
     def eeLinkToHandFrameModified(self, handFrameObj):
         self.eeLinkToHandFrame = transformUtils.copyFrame(handFrameObj.transform)
@@ -87,6 +95,16 @@ class ContinuousManipPlanner(object):
         if reachFrameObj != self.reachFrameObj:
             self.reachFrameObj = reachFrameObj
             self.grabToReachFrameCallback = self.reachFrameObj.connectFrameModified(self.grabToReachFrameModified)
+
+        self.retractFrame = transformUtils.copyFrame(self.grabFrame)
+        self.retractFrame.PreMultiply()
+        self.retractFrame.Concatenate(self.grabToRetractFrame)
+        vis.updateFrame(self.retractFrame, 'Manipuland Retract Frame', parent='estimation', visible=True, scale=0.2)
+
+        retractFrameObj = om.findObjectByName('Manipuland Retract Frame')
+        if retractFrameObj != self.retractFrameObj:
+            self.retractFrameObj = retractFrameObj
+            self.grabToRetractFrameCallback = self.retractFrameObj.connectFrameModified(self.grabToRetractFrameModified)
 
         self.handFrame = transformUtils.copyFrame(self.manipulatorStateModel.getLinkFrame(self.manipulatorLinkName))
         self.handFrame.PreMultiply()
@@ -117,6 +135,9 @@ class ContinuousManipPlanner(object):
 
     def planReach(self, side='left'):
         self.planManipToGivenFrame(self.reachFrame, side)
+
+    def planRetract(self, side='left'):
+        self.planManipToGivenFrame(self.retractFrame, side)
 
     def planGrab(self, side='left'):
         self.planManipToGivenFrame(self.grabFrame, side)
@@ -252,6 +273,8 @@ class ContinuousManipPanel(TaskUserPanel):
         if self.planner.ikPlanner.fixedBaseArm:
             addManipulation(functools.partial(self.planner.planReach, 'left'), name='reach')
             addManipulation(functools.partial(self.planner.planGrab, 'left'), name='grab')
+            schunkGroup = self.taskTree.addGroup('grasp (TODO)')  # TODO: placeholder. Publish schunk lcmtype or maybe just 'close/open' trigger
+            addManipulation(functools.partial(self.planner.planRetract, 'left'), name='retract')
 
 
 
