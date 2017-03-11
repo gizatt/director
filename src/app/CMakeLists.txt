@@ -33,11 +33,6 @@ include_directories(${PYTHONQT_INCLUDE_DIRS})
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 
-set(CVUTILS_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include/cv-utils)
-set(CVUTILS_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libcv-utils.so)
-set(CVUTILS_LIBRARIES ${CVUTILS_LIBRARY})
-include_directories(${CVUTILS_INCLUDE_DIRS})
-
 set(decorator_file ${CMAKE_CURRENT_BINARY_DIR}/ddPythonQtDecorators.h)
 
 # Configure whether to use the QVTKWidget or the QVTKOpenGLWidget
@@ -222,7 +217,14 @@ if (TRUE)
   find_package(OpenCV REQUIRED)
   include_directories(${OpenCV_INCLUDE_DIRS})
 
-  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cv_utils)
+  find_package(ZLIB REQUIRED)
+
+  find_library(CVUTILS_LIBRARY cv-utils DOC "The cv-utils library")
+  find_path(CVUTILS_INCLUDE_DIR image_utils/jpeg.h PATH_SUFFIXES cv-utils DOC "Path to the cv-utils include directory")
+
+  set(CVUTILS_INCLUDE_DIRS ${CVUTILS_INCLUDE_DIR})
+  set(CVUTILS_LIBRARIES ${CVUTILS_LIBRARY})
+  include_directories(${CVUTILS_INCLUDE_DIRS})
 
   set(moc_srcs)
   qt_wrap_cpp(moc_srcs
@@ -247,6 +249,7 @@ if (TRUE)
     ${PCL_LIBRARIES}
     ${OpenCV_LIBS}
     ${CVUTILS_LIBRARIES}
+    ${ZLIB_LIBRARIES}
   )
 
   list(APPEND pkg_deps
